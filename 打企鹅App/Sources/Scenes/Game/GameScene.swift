@@ -230,6 +230,7 @@ class GameScene: SKScene {
 
     private var levelConfig: LevelConfig!
     private var iceBlocks: [IceBlockNode] = []
+    private var iceBlockInitialPositions: [CGPoint] = []
 
     // MARK: - 节点引用
 
@@ -266,6 +267,9 @@ class GameScene: SKScene {
     }
 
     override func didMove(to view: SKView) {
+        // 重置道具效果（跨关卡残留bug修复）
+        ItemSystem.shared.resetForNewLevel()
+
         setupPhysicsWorld()
         setupSlingshot()
         setupPenguinQueue()
@@ -557,13 +561,16 @@ class GameScene: SKScene {
 
     private func setupIceBlocks() {
         iceBlocks.removeAll()
+        iceBlockInitialPositions.removeAll()
         for config in levelConfig.iceBlocks {
             let blockSize: CGFloat = 48
             let block = IceBlockNode(type: config.type, size: CGSize(width: blockSize, height: blockSize))
-            block.position = CGPoint(x: frame.width * config.x, y: frame.height * config.y)
+            let pos = CGPoint(x: frame.width * config.x, y: frame.height * config.y)
+            block.position = pos
             block.zPosition = 8
             addChild(block)
             iceBlocks.append(block)
+            iceBlockInitialPositions.append(pos)
         }
     }
 
@@ -836,6 +843,24 @@ class GameScene: SKScene {
         guard let penguin = activePenguin,
               let pb = penguin.physicsBody else { return }
 
+        // 炸弹道具效果：对所有冰块造成爆炸伤害
+        if ItemSystem.shared.hasBomb {
+            for block in iceBlocks where !block.isBreaking {
+                let destroyed = block.takeDamage(block.maxDurability)
+                if destroyed {
+                    roundComboCount += 1
+                    addScoreForBlock(block)
+                    let blockRef = block
+                    block.playBreakAnimation { [weak self] in
+                        self?.iceBlocks.removeAll { $0 === blockRef }
+                        self?.checkLevelComplete()
+                    }
+                }
+            }
+            ItemSystem.shared.consumeBomb()
+            return
+        }
+
         let penguinSpeed = sqrt(pb.velocity.dx * pb.velocity.dx + pb.velocity.dy * pb.velocity.dy)
 
         for block in iceBlocks {
@@ -995,8 +1020,26 @@ class GameScene: SKScene {
     // MARK: - 回合结束
 
     private func onPenguinStopped() {
+        // 重置道具效果：将所有冰块恢复到初始位置
+        if ItemSystem.shared.hasReset {
+            resetIceBlocks()
+            ItemSystem.shared.consumeReset()
+        }
+
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             self.checkLevelComplete()
+        }
+    }
+
+    /// 将所有冰块恢复到初始位置和状态
+    private func resetIceBlocks() {
+        for (index, block) in iceBlocks.enumerated() where index < iceBlockInitialPositions.count {
+            let pos = iceBlockInitialPositions[index]
+            block.position = pos
+            block.durability = block.maxDurability
+            block.alpha = 1.0
+            block.isHidden = false
+            block.isBreaking = false
         }
     }
 

@@ -23,6 +23,7 @@ class SaveManager {
         static let coins = "coins"
         static let stamina = "stamina"
         static let lastStaminaUpdate = "last_stamina_update"
+        static let hasRecord = "has_record"
     }
 
     // MARK: - 数据属性
@@ -40,6 +41,9 @@ class SaveManager {
     // MARK: - 加载 / 保存
 
     func load() {
+        // 检查是否真的有存档（用 hasRecord 标记）
+        let hasRecord = defaults.bool(forKey: Keys.hasRecord)
+
         // 加载每关最高分
         if let data = defaults.data(forKey: Keys.highestScores),
            let scores = try? JSONDecoder().decode([Int: ScoreRecord].self, from: data) {
@@ -53,10 +57,14 @@ class SaveManager {
         // 加载金币
         coins = defaults.integer(forKey: Keys.coins)
 
-        // 加载体力
-        stamina = defaults.integer(forKey: Keys.stamina)
-        if stamina == 0 {
-            stamina = 30  // 首次游戏满体力
+        if !hasRecord {
+            // 首次安装：初始化体力为30，新手金币为100
+            stamina = 30
+            coins = 100
+            defaults.set(true, forKey: Keys.hasRecord)
+        } else {
+            // 有存档，正常读取体力（体力为0表示耗尽状态，等recoverStamina补算）
+            stamina = defaults.integer(forKey: Keys.stamina)
         }
 
         // 加载上次体力更新时间

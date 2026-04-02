@@ -76,6 +76,9 @@ class LevelSelectViewController: UIViewController {
     }
 
     private func startLevel(_ level: Int) {
+        // 重置道具效果（跨关卡残留bug修复）
+        ItemSystem.shared.resetForNewLevel()
+
         // 检查体力
         if StaminaSystem.shared.isEmpty {
             showStaminaEmptyAlert()
