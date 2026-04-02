@@ -1,0 +1,37 @@
+# Xcode
+build/
+*.xcuserstate
+*.xcuserdatad
+*.xcworkspace
+!*.xcworkspace
+xcuserdata/
+*.moved-aside
+DerivedData
+*.hmap
+*.ipa
+*.xcuserstate
+
+# CocoaPods
+Pods/
+*.xcworkspace
+Podfile.lock
+
+# CocoaPods (in project root)
+*.xcworkspace
+Podfile.lock
+
+# Build logs
+*.log
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Swift Package Manager
+.swiftpm/
+Packages/Package.resolved
+
+# Archives
+*.dSYM.zip
+*.app.dSYM.zip
