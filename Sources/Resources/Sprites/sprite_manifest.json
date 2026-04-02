@@ -1,0 +1,151 @@
+{
+  "version": "1.0",
+  "week": "Week 6-9",
+  "app": "打企鹅App",
+  "sprite_size": "32x32",
+  "ui_sprite_size": "16x16",
+  "author": "乌兰 (code-engineer)",
+  "sprites": [
+    {
+      "file": "penguin_stand.png",
+      "category": "penguin",
+      "description": "企鹅站立姿态，白色身体，橙色喙，黑色眼睛"
+    },
+    {
+      "file": "penguin_fly.png",
+      "category": "penguin",
+      "description": "企鹅飞行姿态，翅膀展开，向右倾斜15度"
+    },
+    {
+      "file": "penguin_hit.png",
+      "category": "penguin",
+      "description": "企鹅撞击状态，身体变形，表情痛苦，X形眼睛"
+    },
+    {
+      "file": "penguin_win.png",
+      "category": "penguin",
+      "description": "企鹅胜利姿态，跳跃中，弧形笑眼"
+    },
+    {
+      "file": "penguin_blue.png",
+      "category": "skin",
+      "description": "蓝色企鹅皮肤，蓝色身体+白肚子"
+    },
+    {
+      "file": "penguin_red.png",
+      "category": "skin",
+      "description": "红色企鹅皮肤，红色身体"
+    },
+    {
+      "file": "penguin_gold.png",
+      "category": "skin",
+      "description": "金色企鹅皮肤，金色身体带闪亮高光"
+    },
+    {
+      "file": "penguin_white.png",
+      "category": "skin",
+      "description": "雪企鹅皮肤，全白身体"
+    },
+    {
+      "file": "penguin_fat.png",
+      "category": "skin",
+      "description": "胖企鹅皮肤，身体更圆更大"
+    },
+    {
+      "file": "slingshot.png",
+      "category": "道具",
+      "description": "弹弓道具，棕色Y形框架带皮筋"
+    },
+    {
+      "file": "slingshot_pull.png",
+      "category": "道具",
+      "description": "拉伸状态弹弓，皮筋拉满，中间有灰色弹丸"
+    },
+    {
+      "file": "ice_normal.png",
+      "category": "冰块",
+      "description": "普通冰块，淡蓝色半透明"
+    },
+    {
+      "file": "ice_cracked.png",
+      "category": "冰块",
+      "description": "裂纹冰块，淡蓝色带裂纹纹理"
+    },
+    {
+      "file": "ice_explode.png",
+      "category": "冰块",
+      "description": "爆炸冰块，淡蓝色带橙色爆炸标记"
+    },
+    {
+      "file": "explosion_0.png",
+      "category": "特效",
+      "description": "爆炸动画第1帧（最小橙色圆圈）"
+    },
+    {
+      "file": "explosion_1.png",
+      "category": "特效",
+      "description": "爆炸动画第2帧（逐渐扩大）"
+    },
+    {
+      "file": "explosion_2.png",
+      "category": "特效",
+      "description": "爆炸动画第3帧（继续扩大）"
+    },
+    {
+      "file": "explosion_3.png",
+      "category": "特效",
+      "description": "爆炸动画第4帧（接近最大）"
+    },
+    {
+      "file": "explosion_4.png",
+      "category": "特效",
+      "description": "爆炸动画第5帧（最大暗红圆圈）"
+    },
+    {
+      "file": "bg_snow.png",
+      "category": "背景",
+      "description": "雪地背景：淡蓝天空+白色地面+远山剪影"
+    },
+    {
+      "file": "bg_iceberg.png",
+      "category": "背景",
+      "description": "冰山背景：深蓝天空+锯齿冰山+浅蓝地面"
+    },
+    {
+      "file": "bg_aurora.png",
+      "category": "背景",
+      "description": "极光背景：深色夜空+绿/紫色极光带"
+    },
+    {
+      "file": "ui_coin.png",
+      "category": "UI",
+      "size": "16x16",
+      "description": "金币图标，黄色圆形带高光"
+    },
+    {
+      "file": "ui_heart_full.png",
+      "category": "UI",
+      "size": "16x16",
+      "description": "满血爱心，红色心形"
+    },
+    {
+      "file": "ui_heart_empty.png",
+      "category": "UI",
+      "size": "16x16",
+      "description": "空血爱心，灰色心形"
+    },
+    {
+      "file": "ui_star_full.png",
+      "category": "UI",
+      "size": "16x16",
+      "description": "满星，黄色五角星"
+    },
+    {
+      "file": "ui_star_empty.png",
+      "category": "UI",
+      "size": "16x16",
+      "description": "空星，灰色五角星"
+    }
+  ],
+  "total_sprites": 27
+}
