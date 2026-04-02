@@ -1,4 +1,5 @@
 import SpriteKit
+import AVFoundation
 
 // MARK: - 物理常量
 
@@ -744,6 +745,9 @@ class GameScene: SKScene {
         // 皮筋弹回动画
         animateBandsRelease()
 
+        // 播放发射音效
+        AudioManager.shared.playLaunchSound()
+
         // 更新队列
         penguinsRemaining -= 1
         updatePenguinCountDisplay()
@@ -880,6 +884,8 @@ class GameScene: SKScene {
                 if destroyed {
                     roundComboCount += 1
                     addScoreForBlock(block)
+                    AudioManager.shared.playIceBreakSound()
+                    ParticleEffects.shared.playExplosion(at: block.position, in: self)
                     let blockRef = block
                     block.playBreakAnimation { [weak self] in
                         self?.iceBlocks.removeAll { $0 === blockRef }
@@ -893,6 +899,7 @@ class GameScene: SKScene {
 
                 if roundComboCount >= 2 {
                     showComboEffect(count: roundComboCount, at: block.position)
+                    ParticleEffects.shared.playCombo(at: block.position, comboLevel: roundComboCount, in: self)
                 }
                 break
             }
@@ -908,6 +915,8 @@ class GameScene: SKScene {
         explosionNode.zPosition = 30
         explosionNode.alpha = 0
         addChild(explosionNode)
+
+        AudioManager.shared.playExplosionSound()
 
         let expand = SKAction.scale(to: 1.5, duration: 0.15)
         expand.timingMode = .easeOut
@@ -928,6 +937,8 @@ class GameScene: SKScene {
                 if destroyed {
                     roundComboCount += 1
                     addScoreForBlock(block)
+                    AudioManager.shared.playIceBreakSound()
+                    ParticleEffects.shared.playExplosion(at: block.position, in: self)
                     let blockRef = block
                     block.playBreakAnimation { [weak self] in
                         self?.iceBlocks.removeAll { $0 === blockRef }
@@ -1057,6 +1068,13 @@ class GameScene: SKScene {
     }
 
     private func showResult(success: Bool) {
+        // 播放结果音效
+        if success {
+            AudioManager.shared.playGameWinSound()
+        } else {
+            AudioManager.shared.playGameFailSound()
+        }
+
         // 保存分数和解锁关卡
         let stars = calculateStars()
         if success {
@@ -1140,6 +1158,13 @@ class GameScene: SKScene {
         titleLabel.run(SKAction.sequence([SKAction.wait(forDuration: 0.2), fadeIn]))
         scoreResultLabel.run(SKAction.sequence([SKAction.wait(forDuration: 0.4), fadeIn]))
         starsLabel.run(SKAction.sequence([SKAction.wait(forDuration: 0.6), fadeIn]))
+        // 通关时播放星星爆发特效
+        if success {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { [weak self] in
+                guard let self = self else { return }
+                ParticleEffects.shared.playStarBurst(at: CGPoint(x: self.frame.width / 2, y: self.frame.height / 2), in: self)
+            }
+        }
         actionBtn.run(SKAction.sequence([SKAction.wait(forDuration: 0.8), fadeIn]))
         if success && currentLevel < Levels.totalLevels {
             resultOverlay?.childNode(withName: "resultBackButton")?.run(SKAction.sequence([SKAction.wait(forDuration: 0.9), fadeIn]))

@@ -19,6 +19,9 @@ class GameViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
+        // 播放游戏背景音乐
+        AudioManager.shared.playMusic(.game)
+
         // 创建 SpriteKit 场景
         scene = GameScene(level: level)
         scene.scaleMode = .resizeFill

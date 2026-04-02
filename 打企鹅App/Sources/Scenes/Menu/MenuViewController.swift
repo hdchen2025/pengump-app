@@ -94,6 +94,8 @@ class MenuViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         updateUI()
+        // 播放菜单背景音乐
+        AudioManager.shared.playMusic(.menu)
     }
 
     // MARK: - Setup
@@ -208,7 +210,10 @@ class MenuViewController: UIViewController {
     }
 
     @objc private func settingsTapped() {
-        // TODO: 设置页面
+        AudioManager.shared.playButtonTapSound()
+        let settingsVC = SettingsViewController()
+        settingsVC.modalPresentationStyle = .fullScreen
+        present(settingsVC, animated: true)
     }
 
     // MARK: - 弹窗
