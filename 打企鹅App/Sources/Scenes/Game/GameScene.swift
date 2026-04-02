@@ -1123,4 +1123,17 @@ class GameScene: SKScene {
     private func dismiss(animated: Bool) {
         view?.window?.rootViewController?.dismiss(animated: animated)
     }
+
+    // MARK: - Pause / Resume
+    override func sceneDidBecomeActive() {
+        // 恢复游戏
+        isPaused = false
+        physicsWorld.speed = 1.0
+    }
+
+    override func sceneWillResignActive() {
+        // 暂停游戏
+        isPaused = true
+        physicsWorld.speed = 0.0
+    }
 }

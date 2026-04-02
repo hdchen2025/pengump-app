@@ -32,6 +32,28 @@ class GameViewController: UIViewController {
         skView.backgroundColor = .clear
         view.addSubview(skView)
         view.backgroundColor = UIColor(red: 0.85, green: 0.95, blue: 1.0, alpha: 1.0)
+
+        // 监听系统通知：应用进入后台/前台
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillResignActive),
+            name: UIApplication.willResignActiveNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidBecomeActive),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
+    }
+
+    @objc private func appWillResignActive() {
+        scene?.isPaused = true
+    }
+
+    @objc private func appDidBecomeActive() {
+        scene?.isPaused = false
     }
 
     override var prefersStatusBarHidden: Bool { true }
