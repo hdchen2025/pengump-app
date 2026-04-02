@@ -18,6 +18,7 @@
 		662B0389288C6DC735956397 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AEF8015343FC2EDB37FB7AE0 /* LaunchScreen.storyboard */; };
 		735ADD0B51576C956F3D6CF4 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2707934CB301A803AC2AE2F4 /* SceneDelegate.swift */; };
 		79E7BCD8E980E080227F78FC /* PrivacyPolicyViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76174B3C6E9DAEC91DE8A568 /* PrivacyPolicyViewController.swift */; };
+		904064870A46431FD9FC161B /* Pods_pengump.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 54983CD4A8D591130F0B51F2 /* Pods_pengump.framework */; };
 		A8190C473D73AF835F955FD8 /* AppStoreIcon.png in Resources */ = {isa = PBXBuildFile; fileRef = BEADE6BC756CCA13DB50CC87 /* AppStoreIcon.png */; };
 		A9563C694478EEA349D66C87 /* GameScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2354C73780C16A20E0B4E9CD /* GameScene.swift */; };
 		BBFFFA71312BFF790924E99D /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63B5DDE0FC4205267DA8E66D /* AppDelegate.swift */; };
@@ -25,24 +26,23 @@
 		C14CC4F104802C21C004DBAD /* GameViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B29CEC8BB408B67544854A99 /* GameViewController.swift */; };
 		ECD5A529E1730C59CB3A0C50 /* ItemSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F6D7CCC6D63706FB25AC9F0 /* ItemSystem.swift */; };
 		F99E8BC53EA0C2D739FBC910 /* StaminaSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A46B2BA23077A2F86B57FE0 /* StaminaSystem.swift */; };
-		F9B8A796F83E1FC9245C63A3 /* Pods_pengump.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 72850F70DA67BD015A8A6225 /* Pods_pengump.framework */; };
 		FF633B37A821AAFD409268E7 /* MenuViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5631C23FAA10CF562ED6D07 /* MenuViewController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		02F811C1E9ECC6D90A984090 /* Pods-pengump.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-pengump.release.xcconfig"; path = "Target Support Files/Pods-pengump/Pods-pengump.release.xcconfig"; sourceTree = "<group>"; };
 		0F6D7CCC6D63706FB25AC9F0 /* ItemSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemSystem.swift; sourceTree = "<group>"; };
 		2354C73780C16A20E0B4E9CD /* GameScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameScene.swift; sourceTree = "<group>"; };
 		2707934CB301A803AC2AE2F4 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		2B6D7DD25EABF6F2133F8426 /* Contents.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Contents.json; sourceTree = "<group>"; };
 		33968680B5EAFB625487FFE7 /* ParticleEffects.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParticleEffects.swift; sourceTree = "<group>"; };
 		3E73AF44A123701885864905 /* SaveManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveManager.swift; sourceTree = "<group>"; };
+		4472461E18091A9378414DD1 /* Pods-pengump.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-pengump.debug.xcconfig"; path = "Target Support Files/Pods-pengump/Pods-pengump.debug.xcconfig"; sourceTree = "<group>"; };
+		54983CD4A8D591130F0B51F2 /* Pods_pengump.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_pengump.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		5DA3747C4909F0A9246401B5 /* LeaderboardManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeaderboardManager.swift; sourceTree = "<group>"; };
 		63B5DDE0FC4205267DA8E66D /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
-		66B30BB5870A90286DA0E571 /* Pods-pengump.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-pengump.release.xcconfig"; path = "Target Support Files/Pods-pengump/Pods-pengump.release.xcconfig"; sourceTree = "<group>"; };
-		72850F70DA67BD015A8A6225 /* Pods_pengump.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_pengump.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		75590B268D17DA35135A9E9C /* levels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = levels.swift; sourceTree = "<group>"; };
 		76174B3C6E9DAEC91DE8A568 /* PrivacyPolicyViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyPolicyViewController.swift; sourceTree = "<group>"; };
-		882D3859B9279EBB73F20F8A /* Pods-pengump.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-pengump.debug.xcconfig"; path = "Target Support Files/Pods-pengump/Pods-pengump.debug.xcconfig"; sourceTree = "<group>"; };
 		95BF8CA55F58D1D17F04F6D3 /* AudioManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioManager.swift; sourceTree = "<group>"; };
 		9A46B2BA23077A2F86B57FE0 /* StaminaSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StaminaSystem.swift; sourceTree = "<group>"; };
 		AEF8015343FC2EDB37FB7AE0 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
@@ -56,11 +56,11 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		D8283099296F1E4AC4DE622C /* Frameworks */ = {
+		6B6275F74D7C31B72F7CED0B /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				F9B8A796F83E1FC9245C63A3 /* Pods_pengump.framework in Frameworks */,
+				904064870A46431FD9FC161B /* Pods_pengump.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -136,6 +136,14 @@
 			path = About;
 			sourceTree = "<group>";
 		};
+		6CD187F66337C8AD9157ED86 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				54983CD4A8D591130F0B51F2 /* Pods_pengump.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		73CF708556B93F2C12782810 /* Game */ = {
 			isa = PBXGroup;
 			children = (
@@ -152,24 +160,6 @@
 				BB3D9D4F2DA4B9F472E544F0 /* pengump.app */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		9BAC9883736643B427ACE11D /* Pods */ = {
-			isa = PBXGroup;
-			children = (
-				882D3859B9279EBB73F20F8A /* Pods-pengump.debug.xcconfig */,
-				66B30BB5870A90286DA0E571 /* Pods-pengump.release.xcconfig */,
-			);
-			name = Pods;
-			path = Pods;
-			sourceTree = "<group>";
-		};
-		A3943B32FFF3D4553D0ACA98 /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-				72850F70DA67BD015A8A6225 /* Pods_pengump.framework */,
-			);
-			name = Frameworks;
 			sourceTree = "<group>";
 		};
 		A4C3FC2754CC4555AB27D4B8 /* Sources */ = {
@@ -203,8 +193,8 @@
 				53F43B51124B34D0AC61A564 /* Assets.xcassets */,
 				A4C3FC2754CC4555AB27D4B8 /* Sources */,
 				881FC592350C5AAC0BEA611C /* Products */,
-				9BAC9883736643B427ACE11D /* Pods */,
-				A3943B32FFF3D4553D0ACA98 /* Frameworks */,
+				E0B04912E43682B8F2EE1694 /* Pods */,
+				6CD187F66337C8AD9157ED86 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -249,6 +239,16 @@
 			children = (
 			);
 			path = UI;
+			sourceTree = "<group>";
+		};
+		E0B04912E43682B8F2EE1694 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				4472461E18091A9378414DD1 /* Pods-pengump.debug.xcconfig */,
+				02F811C1E9ECC6D90A984090 /* Pods-pengump.release.xcconfig */,
+			);
+			name = Pods;
+			path = Pods;
 			sourceTree = "<group>";
 		};
 		E4114F4EEC842E01DE242E6A /* Systems */ = {
@@ -296,11 +296,11 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = CC548974C866C095576740E7 /* Build configuration list for PBXNativeTarget "pengump" */;
 			buildPhases = (
-				641E3CD89403660A824445F5 /* [CP] Check Pods Manifest.lock */,
+				4060A99645FB1ACE7FC90350 /* [CP] Check Pods Manifest.lock */,
 				434BB4064ECA0CA33FE0AEB5 /* Sources */,
 				7260C5DFB015353FFF8B47B8 /* Resources */,
-				D8283099296F1E4AC4DE622C /* Frameworks */,
-				066C8C0F41DB5BE5B0FA1F82 /* [CP] Embed Pods Frameworks */,
+				6B6275F74D7C31B72F7CED0B /* Frameworks */,
+				4B4B20F382E91AB702EED57E /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -359,24 +359,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		066C8C0F41DB5BE5B0FA1F82 /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-pengump/Pods-pengump-frameworks-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-pengump/Pods-pengump-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-pengump/Pods-pengump-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		641E3CD89403660A824445F5 /* [CP] Check Pods Manifest.lock */ = {
+		4060A99645FB1ACE7FC90350 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -396,6 +379,23 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		4B4B20F382E91AB702EED57E /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-pengump/Pods-pengump-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-pengump/Pods-pengump-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-pengump/Pods-pengump-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
@@ -476,7 +476,6 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
@@ -494,7 +493,7 @@
 		};
 		A68EC5C178473FF4B1EA4087 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 882D3859B9279EBB73F20F8A /* Pods-pengump.debug.xcconfig */;
+			baseConfigurationReference = 4472461E18091A9378414DD1 /* Pods-pengump.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -517,7 +516,7 @@
 		};
 		D0086DED0DCE22ECF4F3CC8F /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 66B30BB5870A90286DA0E571 /* Pods-pengump.release.xcconfig */;
+			baseConfigurationReference = 02F811C1E9ECC6D90A984090 /* Pods-pengump.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -593,7 +592,6 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;

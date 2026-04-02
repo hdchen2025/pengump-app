@@ -12,7 +12,8 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = scene as? UIWindowScene else { return }
 
         let window = UIWindow(windowScene: windowScene)
-        window.backgroundColor = UIColor(red: 0.13, green: 0.43, blue: 0.93, alpha: 1.0)
+        // Keep first frame color aligned with LaunchScreen background to avoid flash feeling.
+        window.backgroundColor = UIColor(red: 0.85, green: 0.95, blue: 1.0, alpha: 1.0)
 
         let menuViewController = MenuViewController()
         window.rootViewController = menuViewController

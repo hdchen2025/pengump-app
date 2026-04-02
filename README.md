@@ -61,6 +61,8 @@ open 打企鹅App.xcworkspace
 ```
 
 > ⚠️ **重要**：请务必使用 `.xcworkspace` 打开项目，而非 `.xcodeproj`，否则 SnapKit 和 AdMob 等依赖库不会加载。
+>
+> 命令行验证同样必须走 workspace，例如：`xcodebuild -workspace pengump.xcworkspace -scheme pengump -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17' build`
 
 ---
 
