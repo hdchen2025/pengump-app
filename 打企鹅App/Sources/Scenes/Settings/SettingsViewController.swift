@@ -182,9 +182,10 @@ class SettingsViewController: UIViewController {
     }
 
     private func openPrivacyPolicy() {
-        if let url = URL(string: "https://www.hitpenguin.com/privacy") {
-            UIApplication.shared.open(url)
-        }
+        AudioManager.shared.playButtonTapSound()
+        let privacyVC = PrivacyPolicyViewController()
+        privacyVC.modalPresentationStyle = .pageSheet
+        present(privacyVC, animated: true)
     }
 
     private func openRatePage() {
