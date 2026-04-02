@@ -1,24 +1,17 @@
 import Foundation
-import UIKit
 
-// MARK: - 体力系统
+// MARK: - 体力系统（免费版兼容壳）
 
 class StaminaSystem {
     static let shared = StaminaSystem()
 
-    // 体力上限
+    // 体力上限（兼容展示）
     let maxStamina: Int = 30
-
-    // 恢复间隔（秒）= 5分钟
-    private let recoveryInterval: TimeInterval = 300
-
-    // 恢复Timer
-    private var recoveryTimer: Timer?
 
     // 回调：体力变化时通知
     var onStaminaChanged: ((Int, Int) -> Void)?  // (current, max)
 
-    // 回调：体力耗尽时通知
+    // 回调：体力耗尽时通知（免费版不触发）
     var onStaminaEmpty: (() -> Void)?
 
     private init() {}
@@ -26,59 +19,31 @@ class StaminaSystem {
     // MARK: - 当前体力
 
     var currentStamina: Int {
-        return SaveManager.shared.stamina
+        maxStamina
     }
 
     var isEmpty: Bool {
-        return currentStamina <= 0
+        false
     }
 
     // MARK: - 消耗体力
 
-    /// 消耗1点体力，返回是否成功
+    /// 消耗1点体力，返回是否成功（免费版恒为成功）
     @discardableResult
     func consume() -> Bool {
-        if currentStamina > 0 {
-            _ = SaveManager.shared.consumeStamina()
-            notifyChange()
-            return true
-        } else {
-            onStaminaEmpty?()
-            return false
-        }
+        notifyChange()
+        return true
     }
 
-    // MARK: - 后台恢复
+    // MARK: - 后台恢复（免费版停用）
 
-    /// 启动体力恢复定时器
+    /// 启动体力恢复定时器（兼容 no-op）
     func startRecoveryTimer() {
-        stopRecoveryTimer()
-
-        recoveryTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.tick()
-        }
+        // no-op
     }
 
     func stopRecoveryTimer() {
-        recoveryTimer?.invalidate()
-        recoveryTimer = nil
-    }
-
-    private func tick() {
-        guard currentStamina < maxStamina else {
-            stopRecoveryTimer()
-            return
-        }
-
-        // 每秒检查一次是否需要恢复
-        if let recoveryTime = SaveManager.shared.staminaRecoveryTime(),
-           recoveryTime == "0:00" {
-            // 刚好恢复1点
-            SaveManager.shared.stamina = min(SaveManager.shared.stamina + 1, maxStamina)
-            SaveManager.shared.lastStaminaUpdate = Date()
-            SaveManager.shared.save()
-            notifyChange()
-        }
+        // no-op
     }
 
     // MARK: - 通知
@@ -94,20 +59,11 @@ class StaminaSystem {
 
     /// 生成体力图标数组（filledCount个❤️ + emptyCount个🖤）
     func staminaIcons() -> [String] {
-        let filled = min(currentStamina, maxStamina)
-        let empty = maxStamina - filled
-        var icons: [String] = []
-        for _ in 0..<filled {
-            icons.append("❤️")
-        }
-        for _ in 0..<empty {
-            icons.append("🖤")
-        }
-        return icons
+        Array(repeating: "❤️", count: maxStamina)
     }
 
     /// 简化版：只显示数字
     func staminaText() -> String {
-        return "\(currentStamina)/\(maxStamina)"
+        "\(currentStamina)/\(maxStamina)"
     }
 }

@@ -69,6 +69,11 @@ class PrivacyPolicyViewController: UIViewController {
                 border-radius: 4px;
                 margin-bottom: 8px;
             }
+            .subtitle {
+                color: #666;
+                font-size: 13px;
+                margin-bottom: 8px;
+            }
             ul { padding-left: 20px; margin-bottom: 12px; }
             li { margin-bottom: 6px; }
             .footer {
@@ -83,75 +88,74 @@ class PrivacyPolicyViewController: UIViewController {
     </head>
     <body>
         <div class="card">
-            <h1>隐私政策</h1>
-            <p style="color:#888; font-size:13px;">更新日期：2025年1月1日</p>
+            <h1>隐私政策 / Privacy Policy</h1>
+            <p style="color:#888; font-size:13px;">更新日期 Updated: 2026-04-02</p>
+            <p class="subtitle">本页面提供中文与英文版本，两者含义一致。<br>This page provides both Chinese and English text with the same meaning.</p>
         </div>
 
         <div class="card">
-            <span class="tag">数据收集</span>
-            <h2>我们收集什么</h2>
-            <p>「打企鹅」App会收集以下信息以改进用户体验：</p>
+            <span class="tag">数据范围 / Data Scope</span>
+            <h2>我们收集什么 / What We Collect</h2>
+            <p>「打企鹅」免费版的核心数据保存在本机，不需要账号注册。<br>The free edition stores core gameplay data on your device and does not require account registration.</p>
             <ul>
-                <li><strong>设备信息：</strong>设备型号、操作系统版本、屏幕分辨率，用于优化游戏适配性</li>
-                <li><strong>游戏数据：</strong>最高分、关卡进度、设置偏好，存储在本地设备</li>
-                <li><strong>广告标识符（IDFA）：</strong>用于展示个性化广告（可选），您可在系统设置中限制</li>
-                <li><strong>崩溃日志：</strong>应用崩溃时的匿名错误报告，帮助我们修复问题</li>
+                <li><strong>本地游戏数据 / Local game data:</strong> 最高分、关卡进度、设置偏好，仅保存在设备本地。<br>Best scores, level progress, and settings are stored locally on your device.</li>
+                <li><strong>设备与运行信息 / Device and runtime info:</strong> 设备型号、系统版本、应用版本，用于兼容性排查。<br>Device model, OS version, and app version may be used for compatibility troubleshooting.</li>
+                <li><strong>可选稳定性统计 / Optional stability metrics:</strong> 如启用基础崩溃或性能统计，仅用于定位故障与性能问题。<br>If basic crash/performance metrics are enabled, they are used only for diagnosing failures and performance issues.</li>
             </ul>
-            <p>我们<strong>不会</strong>收集您的姓名、邮箱、电话号码或任何个人身份信息。</p>
+            <p>我们不会收集您的姓名、手机号、邮箱、通讯录或其他身份资料。<br>We do not collect your name, phone number, email, contacts, or other identity data.</p>
         </div>
 
         <div class="card">
-            <span class="tag">第三方SDK</span>
-            <h2>广告服务（Google AdMob）</h2>
-            <p>本App使用 <strong>Google AdMob</strong> 作为广告服务提供商。AdMob可能会收集以下信息：</p>
+            <span class="tag">使用目的 / Purpose</span>
+            <h2>数据如何使用 / How Data Is Used</h2>
             <ul>
-                <li>设备标识符（GAID / IDFA）</li>
-                <li>IP地址、浏览器类型</li>
-                <li>应用使用行为、点击广告记录</li>
-                <li>大致位置（基于IP）</li>
-            </ul>
-            <p>AdMob的隐私政策：<a href="https://policies.google.com/privacy">policies.google.com/privacy</a></p>
-            <p>您可以随时在 iOS「设置 → 隐私 → 广告」中开启「限制广告跟踪」。</p>
-        </div>
-
-        <div class="card">
-            <span class="tag">本地存储</span>
-            <h2>本地数据</h2>
-            <p>您的游戏进度、最高分和设置选项存储在<strong>本机本地</strong>，不会上传至我们的服务器。我们使用 iOS UserDefaults 存储偏好设置，使用本地文件存储游戏存档。</p>
-        </div>
-
-        <div class="card">
-            <span class="tag">用户权利</span>
-            <h2>您的权利</h2>
-            <ul>
-                <li>✅ 随时删除本App，卸载即清除所有本地数据</li>
-                <li>✅ 在iOS设置中关闭「定位服务」（不影响App功能）</li>
-                <li>✅ 开启「限制广告跟踪」减少个性化广告</li>
-                <li>✅ 联系我们（app@hitpenguin.com）询问数据处理事宜</li>
+                <li>用于保存游戏进度与设置。<br>Used to save game progress and settings.</li>
+                <li>用于提升兼容性、稳定性与性能表现。<br>Used to improve compatibility, stability, and performance.</li>
+                <li>仅用于产品运行维护，不用于用户画像。<br>Used only for product operation and maintenance, not for user profiling.</li>
             </ul>
         </div>
 
         <div class="card">
-            <span class="tag">安全</span>
-            <h2>数据安全</h2>
-            <p>本App不收集任何敏感个人信息，数据传输使用HTTPS加密。我们定期审查数据收集行为，确保符合最小必要原则。</p>
+            <span class="tag">本地存储 / Local Storage</span>
+            <h2>本地数据保存 / On-Device Storage</h2>
+            <p>我们使用 iOS UserDefaults 与本地文件保存游戏状态。<br>We use iOS UserDefaults and local files to store game state.</p>
+            <p>默认情况下，游戏数据不会上传到我们的服务器。<br>By default, game data is not uploaded to our servers.</p>
         </div>
 
         <div class="card">
-            <span class="tag">儿童隐私</span>
-            <h2>儿童适用</h2>
-            <p>本App面向全年龄用户。我们不会故意收集13岁以下儿童的个人信息。家长可通过iOS家长控制功能监管App使用。</p>
+            <span class="tag">第三方服务 / Third-Party Services</span>
+            <h2>基础技术服务 / Basic Technical Services</h2>
+            <p>为提升稳定性，应用可能接入基础崩溃与性能统计服务。<br>To improve stability, the app may use basic crash and performance analytics services.</p>
+            <p>此类服务仅处理必要的技术诊断信息。<br>Such services process only necessary technical diagnostic information.</p>
+            <p>如未启用相关服务，则不会上传对应统计数据。<br>If such services are not enabled, related analytics data will not be uploaded.</p>
         </div>
 
         <div class="card">
-            <span class="tag">变更</span>
-            <h2>政策更新</h2>
-            <p>本隐私政策可能随产品更新而修改。重大变更将在App内公告。如您继续使用App，即表示您接受更新后的政策。</p>
+            <span class="tag">用户控制 / Your Controls</span>
+            <h2>您的选择权 / Your Choices</h2>
+            <ul>
+                <li>✅ 您可随时卸载 App 以移除本地数据。<br>You can uninstall the app at any time to remove local data.</li>
+                <li>✅ 您可在系统设置中管理网络与隐私权限。<br>You can manage network and privacy permissions in system settings.</li>
+                <li>✅ 您可通过邮箱联系我们咨询数据处理问题。<br>You can contact us by email for data-processing questions.</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <span class="tag">安全与儿童 / Security & Children</span>
+            <h2>数据安全与儿童隐私 / Data Security & Children</h2>
+            <p>我们采用合理措施保护数据安全，并持续改进产品稳定性。<br>We apply reasonable safeguards to protect data and continuously improve product stability.</p>
+            <p>本应用面向全年龄用户，不会故意收集儿童身份信息。<br>This app is suitable for all ages and does not intentionally collect children’s identity information.</p>
+        </div>
+
+        <div class="card">
+            <span class="tag">政策更新 / Updates</span>
+            <h2>隐私政策变更 / Policy Changes</h2>
+            <p>本政策可能随产品更新而调整，更新后将以应用内信息为准。<br>This policy may be updated with product changes; in-app information after update shall prevail.</p>
         </div>
 
         <div class="footer">
-            © 2025 HitPenguin.com · 打企鹅开发团队<br>
-            联系我们：app@hitpenguin.com
+            © 2026 HitPenguin.com · 打企鹅开发团队<br>
+            联系我们 / Contact: app@hitpenguin.com
         </div>
     </body>
     </html>

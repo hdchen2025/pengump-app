@@ -10,7 +10,6 @@ enum SoundEffect: String, CaseIterable {
     case penguinFly = "penguin_fly"
     case gameFail = "game_fail"
     case gameWin = "game_win"
-    case purchase = "purchase"
     case staminaEmpty = "stamina_empty"
     case combo = "combo"
     case explosion = "explosion"
@@ -125,8 +124,6 @@ class AudioManager {
             playMelody(notes: [330, 294, 262], durations: [0.15, 0.15, 0.3], volume: sfxVolume)
         case .gameWin:
             playMelody(notes: [523, 659, 784, 1047], durations: [0.1, 0.1, 0.1, 0.3], volume: sfxVolume)
-        case .purchase:
-            playTone(frequency: 1047, duration: 0.15, volume: sfxVolume)
         case .staminaEmpty:
             playMelody(notes: [392, 330], durations: [0.2, 0.3], volume: sfxVolume)
         case .combo:
@@ -444,7 +441,6 @@ class AudioManager {
     func playPenguinFlySound() { play(.penguinFly) }
     func playGameFailSound() { play(.gameFail) }
     func playGameWinSound() { play(.gameWin) }
-    func playPurchaseSound() { play(.purchase) }
     func playStaminaEmptySound() { play(.staminaEmpty) }
     func playComboSound() { play(.combo) }
     func playExplosionSound() { play(.explosion) }

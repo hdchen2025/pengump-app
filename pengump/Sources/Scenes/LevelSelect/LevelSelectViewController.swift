@@ -76,14 +76,8 @@ class LevelSelectViewController: UIViewController {
     }
 
     private func startLevel(_ level: Int) {
-        // 重置道具效果（跨关卡残留bug修复）
+        // 重置关卡内临时效果（free edition compat shim）
         ItemSystem.shared.resetForNewLevel()
-
-        // 检查体力
-        if StaminaSystem.shared.isEmpty {
-            showStaminaEmptyAlert()
-            return
-        }
 
         // 检查关卡是否解锁
         guard SaveManager.shared.isLevelUnlocked(level) else {
@@ -91,22 +85,9 @@ class LevelSelectViewController: UIViewController {
             return
         }
 
-        // 消耗体力
-        _ = StaminaSystem.shared.consume()
-
         let gameVC = GameViewController(level: level)
         gameVC.modalPresentationStyle = .fullScreen
         present(gameVC, animated: true)
-    }
-
-    private func showStaminaEmptyAlert() {
-        let alert = UIAlertController(
-            title: "体力不足",
-            message: "体力已耗尽，请等待恢复。",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: "确定", style: .default))
-        present(alert, animated: true)
     }
 
     private func showLockedAlert(level: Int) {

@@ -66,7 +66,6 @@ class SettingsViewController: UIViewController {
         case version(String)
         case privacy
         case rateApp
-        case removeAds
     }
 
     private var sections: [(SettingsSection, [SettingsItem])] = []
@@ -112,8 +111,6 @@ class SettingsViewController: UIViewController {
     }
 
     private func setupData() {
-        let audioManager = AudioManager.shared
-
         let currentLang = UserDefaults.standard.string(forKey: "game_language") ?? "简体中文"
 
         sections = [
@@ -130,7 +127,6 @@ class SettingsViewController: UIViewController {
                 .version("v1.0.0"),
                 .about(isEnglish ? "Hit Penguin - Pixel Slingshot Game" : "打企鹅 - 像素弹弓休闲游戏"),
                 .rateApp,
-                .removeAds,
                 .privacy
             ])
         ]
@@ -195,32 +191,6 @@ class SettingsViewController: UIViewController {
         }
     }
 
-    private func showRemoveAdsPurchase() {
-        let alert = UIAlertController(
-            title: isEnglish ? "Remove Ads" : "移除广告",
-            message: isEnglish ? "One-time purchase, remove all ads permanently.\n\nPrice: ¥25" : "一次性购买，永久移除所有广告。\n\n价格：¥25",
-            preferredStyle: .alert
-        )
-
-        alert.addAction(UIAlertAction(title: isEnglish ? "Purchase" : "购买", style: .default) { [weak self] _ in
-            // TODO: 接入IAP购买
-            self?.showComingSoonAlert()
-        })
-
-        alert.addAction(UIAlertAction(title: isEnglish ? "Cancel" : "取消", style: .cancel))
-
-        present(alert, animated: true)
-    }
-
-    private func showComingSoonAlert() {
-        let alert = UIAlertController(
-            title: isEnglish ? "Coming Soon" : "即将上线",
-            message: isEnglish ? "In-app purchases are being prepared. Stay tuned!" : "内购功能正在准备中，敬请期待！",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: isEnglish ? "OK" : "确定", style: .default))
-        present(alert, animated: true)
-    }
 }
 
 // MARK: - UITableViewDataSource
@@ -322,25 +292,6 @@ extension SettingsViewController: UITableViewDataSource {
             cell.accessoryType = .disclosureIndicator
             return cell
 
-        case .removeAds:
-            let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
-            if AdManager.shared.isAdsRemoved {
-                var config = cell.defaultContentConfiguration()
-                config.text = isEnglish ? "🚫 Ads Removed" : "🚫 已移除广告"
-                config.textProperties.color = .gray
-                cell.contentConfiguration = config
-                cell.selectionStyle = .none
-            } else {
-                var config = cell.defaultContentConfiguration()
-                config.text = isEnglish ? "🚫 Remove Ads" : "🚫 移除广告"
-                config.secondaryText = isEnglish ? "¥25 · Permanent" : "¥25 · 永久有效"
-                config.secondaryTextProperties.color = UIColor(red: 1.0, green: 0.6, blue: 0.0, alpha: 1.0)
-                config.textProperties.color = UIColor(red: 0.2, green: 0.5, blue: 0.9, alpha: 1.0)
-                cell.contentConfiguration = config
-                cell.accessoryType = .disclosureIndicator
-            }
-            return cell
-
         case .privacy:
             let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
             var config = cell.defaultContentConfiguration()
@@ -367,10 +318,6 @@ extension SettingsViewController: UITableViewDelegate {
             showLanguagePicker()
         case .rateApp:
             openRatePage()
-        case .removeAds:
-            if !AdManager.shared.isAdsRemoved {
-                showRemoveAdsPurchase()
-            }
         case .privacy:
             openPrivacyPolicy()
         default:

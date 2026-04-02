@@ -7,10 +7,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
-        // 加载存档数据
+        // 加载存档数据（免费版路径）
         SaveManager.shared.load()
-        // 恢复离线体力
-        SaveManager.shared.recoverStamina()
         return true
     }
 

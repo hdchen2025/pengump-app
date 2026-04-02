@@ -15,9 +15,12 @@ class SaveManager {
     static let shared = SaveManager()
 
     private let defaults = UserDefaults.standard
+    private let currentSaveDataVersion = 2
+    private let maxStaminaValue = 30
 
     // UserDefaults keys
     private enum Keys {
+        static let saveDataVersion = "save_data_version"
         static let highestScores = "highest_scores"
         static let unlockedLevels = "unlocked_levels"
         static let coins = "coins"
@@ -30,9 +33,11 @@ class SaveManager {
 
     var highestScores: [Int: ScoreRecord] = [:]  // 每关最高分
     var unlockedLevels: Int = 1                   // 已解锁最高关卡
-    var coins: Int = 0                            // 金币余额
-    var stamina: Int = 30                         // 当前体力
-    var lastStaminaUpdate: Date = Date()          // 上次体力更新时间
+
+    // 兼容旧经济字段（免费版主流程不依赖）
+    var coins: Int = 0
+    var stamina: Int = 30
+    var lastStaminaUpdate: Date = Date()
 
     // MARK: - 初始化
 
@@ -41,37 +46,48 @@ class SaveManager {
     // MARK: - 加载 / 保存
 
     func load() {
-        // 检查是否真的有存档（用 hasRecord 标记）
         let hasRecord = defaults.bool(forKey: Keys.hasRecord)
+        let hasVersionMarker = defaults.object(forKey: Keys.saveDataVersion) != nil
 
         // 加载每关最高分
         if let data = defaults.data(forKey: Keys.highestScores),
            let scores = try? JSONDecoder().decode([Int: ScoreRecord].self, from: data) {
             highestScores = scores
+        } else {
+            highestScores = [:]
         }
 
         // 加载已解锁关卡
         unlockedLevels = defaults.integer(forKey: Keys.unlockedLevels)
-        if unlockedLevels == 0 { unlockedLevels = 1 }
+        if unlockedLevels <= 0 { unlockedLevels = 1 }
 
-        // 加载金币
+        // 兼容读取旧经济字段（但不驱动免费版主流程）
         coins = defaults.integer(forKey: Keys.coins)
+        let persistedStamina = defaults.integer(forKey: Keys.stamina)
+        stamina = persistedStamina > 0 ? min(persistedStamina, maxStaminaValue) : maxStaminaValue
 
-        if !hasRecord {
-            // 首次安装：初始化体力为30，新手金币为100
-            stamina = 30
-            coins = 100
-            defaults.set(true, forKey: Keys.hasRecord)
-        } else {
-            // 有存档，正常读取体力（体力为0表示耗尽状态，等recoverStamina补算）
-            stamina = defaults.integer(forKey: Keys.stamina)
-        }
-
-        // 加载上次体力更新时间
         if let date = defaults.object(forKey: Keys.lastStaminaUpdate) as? Date {
             lastStaminaUpdate = date
         } else {
             lastStaminaUpdate = Date()
+        }
+
+        // 首次安装初始化（避免覆盖已有历史分数/关卡）
+        let isFreshInstall = !hasRecord && !hasAnyLegacyData()
+        if isFreshInstall {
+            stamina = maxStaminaValue
+            coins = 100
+            defaults.set(true, forKey: Keys.hasRecord)
+        }
+
+        // 迁移：旧版本（无版本号）升级到 v2
+        if !hasVersionMarker {
+            migrateToV2()
+        } else {
+            let savedVersion = defaults.integer(forKey: Keys.saveDataVersion)
+            if savedVersion < currentSaveDataVersion {
+                defaults.set(currentSaveDataVersion, forKey: Keys.saveDataVersion)
+            }
         }
     }
 
@@ -82,9 +98,33 @@ class SaveManager {
         }
 
         defaults.set(unlockedLevels, forKey: Keys.unlockedLevels)
+
+        // 兼容写回旧经济字段（免费版主流程不依赖）
         defaults.set(coins, forKey: Keys.coins)
         defaults.set(stamina, forKey: Keys.stamina)
         defaults.set(lastStaminaUpdate, forKey: Keys.lastStaminaUpdate)
+
+        defaults.set(true, forKey: Keys.hasRecord)
+        defaults.set(currentSaveDataVersion, forKey: Keys.saveDataVersion)
+    }
+
+    private func migrateToV2() {
+        // 不清空任何历史关卡与分数，仅补版本标记
+        defaults.set(currentSaveDataVersion, forKey: Keys.saveDataVersion)
+
+        // 若旧存档存在任意记录，补齐 hasRecord 标记
+        if hasAnyLegacyData() {
+            defaults.set(true, forKey: Keys.hasRecord)
+        }
+    }
+
+    private func hasAnyLegacyData() -> Bool {
+        return defaults.object(forKey: Keys.hasRecord) != nil
+            || defaults.object(forKey: Keys.highestScores) != nil
+            || defaults.object(forKey: Keys.unlockedLevels) != nil
+            || defaults.object(forKey: Keys.coins) != nil
+            || defaults.object(forKey: Keys.stamina) != nil
+            || defaults.object(forKey: Keys.lastStaminaUpdate) != nil
     }
 
     // MARK: - 关卡分数操作
@@ -109,17 +149,17 @@ class SaveManager {
 
     /// 获取关卡记录
     func record(for level: Int) -> ScoreRecord? {
-        return highestScores[level]
+        highestScores[level]
     }
 
     /// 获取关卡星级
     func stars(for level: Int) -> Int {
-        return highestScores[level]?.stars ?? 0
+        highestScores[level]?.stars ?? 0
     }
 
     /// 检查关卡是否已解锁
     func isLevelUnlocked(_ level: Int) -> Bool {
-        return level <= unlockedLevels
+        level <= unlockedLevels
     }
 
     /// 解锁新关卡
@@ -130,7 +170,7 @@ class SaveManager {
         }
     }
 
-    // MARK: - 金币操作
+    // MARK: - 金币操作（兼容保留）
 
     func addCoins(_ amount: Int) {
         coins += amount
@@ -146,47 +186,36 @@ class SaveManager {
         return false
     }
 
-    // MARK: - 体力操作
+    // MARK: - 体力操作（兼容保留，主路径停用门槛）
 
     func consumeStamina() -> Bool {
-        guard stamina > 0 else { return false }
-        stamina -= 1
+        // 免费版不再使用体力门槛；保留方法签名避免调用方崩溃
+        // 仅在兼容字段偏离预期时落盘，避免每次调用都产生无意义写盘。
+        guard stamina != maxStaminaValue else {
+            return true
+        }
+
+        stamina = maxStaminaValue
         lastStaminaUpdate = Date()
         save()
         return true
     }
 
-    /// 根据离线时间恢复体力（每5分钟+1点）
+    /// 根据离线时间恢复体力（免费版主路径停用）
     func recoverStamina() {
-        let now = Date()
-        let elapsed = now.timeIntervalSince(lastStaminaUpdate)
-        let minutesPassed = Int(elapsed / 300)  // 300秒 = 5分钟
-        if minutesPassed > 0 && stamina < 30 {
-            let recovered = min(30 - stamina, minutesPassed)
-            stamina += recovered
-            lastStaminaUpdate = lastStaminaUpdate.addingTimeInterval(TimeInterval(recovered * 300))
-            save()
-        }
+        // no-op: 仅保留兼容入口
     }
 
-    /// 格式化体力恢复时间
+    /// 格式化体力恢复时间（免费版主路径停用）
     func staminaRecoveryTime() -> String? {
-        guard stamina >= 30 else {
-            let elapsed = Date().timeIntervalSince(lastStaminaUpdate)
-            let secondsSinceUpdate = Int(elapsed)
-            let secondsUntilNext = max(0, 300 - secondsSinceUpdate)
-            let minutes = secondsUntilNext / 60
-            let seconds = secondsUntilNext % 60
-            return String(format: "%d:%02d", minutes, seconds)
-        }
-        return nil
+        nil
     }
 
     // MARK: - 排行榜
 
     /// 获取前10名分数记录（按分数降序）
     func topScores(limit: Int = 10) -> [ScoreRecord] {
-        return Array(highestScores.values
+        Array(highestScores.values
             .sorted { $0.score > $1.score }
             .prefix(limit))
     }
