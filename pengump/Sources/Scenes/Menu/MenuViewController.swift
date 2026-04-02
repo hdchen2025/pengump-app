@@ -82,6 +82,18 @@ class MenuViewController: UIViewController {
         return button
     }()
 
+    // MARK: - Init
+
+    override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
+        super.init(nibName: nibNameOrNil, bundle: nibBundleOrNil)
+        self.view.backgroundColor = UIColor(red: 0.85, green: 0.95, blue: 1.0, alpha: 1.0)
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        self.view.backgroundColor = UIColor(red: 0.85, green: 0.95, blue: 1.0, alpha: 1.0)
+    }
+
     // MARK: - Lifecycle
 
     override func viewDidLoad() {
@@ -94,7 +106,6 @@ class MenuViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         updateUI()
-        // 播放菜单背景音乐
         AudioManager.shared.playMusic(.menu)
     }
 

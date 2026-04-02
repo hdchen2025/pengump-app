@@ -12,9 +12,15 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = scene as? UIWindowScene else { return }
 
         let window = UIWindow(windowScene: windowScene)
-        // 启动场景：先显示主菜单
+        window.backgroundColor = UIColor(red: 0.13, green: 0.43, blue: 0.93, alpha: 1.0)
+
         let menuViewController = MenuViewController()
         window.rootViewController = menuViewController
+
+        // 强制 view 布局
+        menuViewController.view.frame = windowScene.screen.bounds
+        menuViewController.view.layoutIfNeeded()
+
         window.makeKeyAndVisible()
         self.window = window
     }
