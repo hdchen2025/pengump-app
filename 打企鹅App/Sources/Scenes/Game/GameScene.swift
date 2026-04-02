@@ -224,6 +224,7 @@ class GameScene: SKScene {
     private var score: Int = 0
     private var roundComboCount: Int = 0
     private var flightState: PenguinFlightState = .ready
+    private var launchTime: TimeInterval = 0
 
     // MARK: - 关卡配置
 
@@ -731,6 +732,7 @@ class GameScene: SKScene {
         penguinNode = nil
         flightState = .flying
         roundComboCount = 0
+        launchTime = lastUpdateTime
 
         // 皮筋弹回动画
         animateBandsRelease()
@@ -807,7 +809,15 @@ class GameScene: SKScene {
         }
 
         // 企鹅停止判定
-        if speed < physics.stopThreshold && penguin.position.y < slingshotBase.position.y + 50 {
+        let timeSinceLaunch = currentTime - launchTime
+        if timeSinceLaunch > 10.0 && speed < physics.stopThreshold {
+            // 超时强制停止（企鹅被卡住时触发）
+            penguin.physicsBody = nil
+            penguin.removeFromParent()
+            activePenguin = nil
+            flightState = .stopped
+            onPenguinStopped()
+        } else if speed < physics.stopThreshold && penguin.position.y < slingshotBase.position.y + 50 {
             penguin.physicsBody = nil
             penguin.removeFromParent()
             activePenguin = nil
@@ -852,7 +862,7 @@ class GameScene: SKScene {
                     }
 
                     if block.blockType == .explosive {
-                        triggerExplosion(at: block.position)
+                        triggerExplosion(at: block.position, collidedBlock: block)
                     }
                 }
 
@@ -864,7 +874,7 @@ class GameScene: SKScene {
         }
     }
 
-    private func triggerExplosion(at position: CGPoint) {
+    private func triggerExplosion(at position: CGPoint, collidedBlock: IceBlockNode? = nil) {
         let explosionNode = SKShapeNode(circleOfRadius: physics.explosionRadius)
         explosionNode.fillColor = UIColor(red: 1.0, green: 0.5, blue: 0.0, alpha: 0.4)
         explosionNode.strokeColor = UIColor(red: 1.0, green: 0.8, blue: 0.0, alpha: 0.8)
@@ -885,10 +895,11 @@ class GameScene: SKScene {
         ]))
 
         for block in iceBlocks where !block.isBreaking {
+            if let collided = collidedBlock, block === collided { continue }
             let dist = hypot(block.position.x - position.x, block.position.y - position.y)
             if dist < physics.explosionRadius && dist > 0 {
-                let damage = Int(Float(block.maxDurability) * Float(physics.explosionDamageRatio))
-                let destroyed = block.takeDamage(max(1, damage))
+                let damage = max(1, Int(ceil(Float(block.maxDurability) * Float(physics.explosionDamageRatio))))
+                let destroyed = block.takeDamage(damage)
                 if destroyed {
                     roundComboCount += 1
                     addScoreForBlock(block)
