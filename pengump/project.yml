@@ -43,8 +43,7 @@ targets:
         CFBundleName: "pengump"
         CFBundleShortVersionString: "1.0.0"
         CFBundleVersion: "1"
-        UILaunchScreen:
-          UIColorName: AccentColor
+        UILaunchStoryboardName: LaunchScreen
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UIRequiresFullScreen: true
