@@ -1014,6 +1014,17 @@ class GameScene: SKScene {
     }
 
     private func showResult(success: Bool) {
+        // 保存分数和解锁关卡
+        let stars = calculateStars()
+        if success {
+            SaveManager.shared.updateScore(level: currentLevel, score: score, stars: stars)
+            SaveManager.shared.unlockLevel(currentLevel + 1)
+            // 通关奖励金币
+            SaveManager.shared.addCoins(stars * 20)
+        } else {
+            SaveManager.shared.updateScore(level: currentLevel, score: score, stars: 0)
+        }
+
         resultOverlay = SKNode()
         resultOverlay?.zPosition = 100
         resultOverlay?.position = CGPoint(x: frame.width / 2, y: frame.height / 2)
