@@ -378,9 +378,6 @@ extension SettingsViewController: UITableViewDelegate {
         }
     }
 
-    func tableView(_ titleForHeaderInSection section: Int) -> String? {
-        return sections[section].0.title
-    }
 }
 
 // MARK: - Switch Cell

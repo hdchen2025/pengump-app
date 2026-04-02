@@ -271,6 +271,7 @@ class GameScene: SKScene {
     override func didMove(to view: SKView) {
         // 重置道具效果（跨关卡残留bug修复）
         ItemSystem.shared.resetForNewLevel()
+        setupPauseNotifications()
 
         setupPhysicsWorld()
         setupSlingshot()
@@ -741,7 +742,7 @@ class GameScene: SKScene {
         penguinNode = nil
         flightState = .flying
         roundComboCount = 0
-        launchTime = lastUpdateTime
+        launchTime = CACurrentMediaTime()
 
         // 附加飞行轨迹粒子
         trailEmitter = ParticleEffects.shared.attachTrail(to: penguin)
@@ -914,7 +915,7 @@ class GameScene: SKScene {
 
                     if roundComboCount >= 2 {
                         showComboEffect(count: roundComboCount, at: block.position)
-                        ParticleEffects.shared.playCombo(at: block.position, comboLevel: roundComboCount, in: self)
+                        ParticleEffects.shared.playCombo(at: block.position, in: self)
                     }
                     break
                 }
@@ -1028,9 +1029,10 @@ class GameScene: SKScene {
             comboLabel.fontColor = UIColor(red: 0.3, green: 0.8, blue: 0.3, alpha: 1.0)
         }
 
+        comboLabel.setScale(0.5)
         let popIn = SKAction.sequence([
-            SKAction.scale(from: 0.5, to: 1.2, duration: 0.15),
-            SKAction.scale(from: 1.2, to: 1.0, duration: 0.1)
+            SKAction.scale(to: 1.2, duration: 0.15),
+            SKAction.scale(to: 1.0, duration: 0.1)
         ])
         let fadeIn = SKAction.fadeIn(withDuration: 0.1)
         let fadeOut = SKAction.fadeOut(withDuration: 0.5)
@@ -1136,7 +1138,6 @@ class GameScene: SKScene {
         scoreResultLabel.alpha = 0
         resultOverlay?.addChild(scoreResultLabel)
 
-        let stars = calculateStars()
         let starsLabel = SKLabelNode(text: String(repeating: "⭐", count: stars))
         starsLabel.fontSize = 36
         starsLabel.position = CGPoint(x: 0, y: -20)
@@ -1232,15 +1233,28 @@ class GameScene: SKScene {
     }
 
     // MARK: - Pause / Resume
-    override func sceneDidBecomeActive() {
-        // 恢复游戏
+    @objc private func appDidBecomeActive() {
         isPaused = false
         physicsWorld.speed = 1.0
     }
 
-    override func sceneWillResignActive() {
-        // 暂停游戏
+    @objc private func appWillResignActive() {
         isPaused = true
         physicsWorld.speed = 0.0
+    }
+
+    private func setupPauseNotifications() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidBecomeActive),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillResignActive),
+            name: UIApplication.willResignActiveNotification,
+            object: nil
+        )
     }
 }

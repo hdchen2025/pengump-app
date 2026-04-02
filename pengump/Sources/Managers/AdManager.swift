@@ -63,6 +63,9 @@ class AdManager {
         get { UserDefaults.standard.integer(forKey: Keys.interstitialCounter) }
         set { UserDefaults.standard.set(newValue, forKey: Keys.interstitialCounter) }
     }
+    
+    // 当前广告计时器（用于关闭按钮及时停止）
+    private var currentAdTimer: Timer?
 
     /// 增加插屏广告计数器（每次关卡完成时调用）
     func incrementInterstitialCounter() {
@@ -272,12 +275,12 @@ class AdManager {
 
         // 模拟广告播放进度
         var progress: Float = 0
-        Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] timer in
+        currentAdTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
             progress += 0.02
             progressView.setProgress(min(progress, 1.0), animated: true)
 
             if progress >= 1.0 {
-                timer.invalidate()
+                self?.currentAdTimer?.invalidate()
                 // 广告播放完成，发放奖励并关闭
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     self?.dismissSimulatedAd(adView: adView, from: viewController, reward: reward)
@@ -287,7 +290,7 @@ class AdManager {
 
         // 关闭按钮回调
         closeButton.addAction(UIAction { [weak self] _ in
-            timer.invalidate()
+            self?.currentAdTimer?.invalidate()
             self?.dismissSimulatedAd(adView: adView, from: viewController, reward: nil)
         }, for: .touchUpInside)
     }
@@ -477,11 +480,11 @@ class AdManager {
             countdown -= 1
             if countdown <= 0 {
                 timer.invalidate()
-                self?.closeButton.isEnabled = true
-                self?.closeButton.backgroundColor = UIColor(red: 0.2, green: 0.5, blue: 0.9, alpha: 1.0)
-                self?.skipLabel.text = "点击关闭广告"
+                closeButton.isEnabled = true
+                closeButton.backgroundColor = UIColor(red: 0.2, green: 0.5, blue: 0.9, alpha: 1.0)
+                skipLabel.text = "点击关闭广告"
             } else {
-                self?.skipLabel.text = "广告 · \(countdown) 秒后可关闭"
+                skipLabel.text = "广告 · \(countdown) 秒后可关闭"
             }
         }
 

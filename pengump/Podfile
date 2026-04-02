@@ -2,13 +2,13 @@ platform :ios, '15.0'
 use_frameworks!
 inhibit_all_warnings!
 
-target '打企鹅App' do
+target 'pengump' do
   # UI布局
   pod 'SnapKit', '~> 5.6'
 
-  # 登录/后端
-  pod 'Firebase/Auth', '~> 10.0'
-  pod 'Firebase/Firestore', '~> 10.0'
+  # 登录/后端（预留，暂不需要）
+  # pod 'Firebase/Auth', '~> 10.0'
+  # pod 'Firebase/Firestore', '~> 10.0'
 
   # 广告（可选，上线前接入）
   # pod 'GoogleMobileAdsMediationAppLovin', '~> 6.0'

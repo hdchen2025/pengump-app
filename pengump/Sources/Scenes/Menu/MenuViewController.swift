@@ -221,7 +221,7 @@ class MenuViewController: UIViewController {
     private func showStaminaEmptyAlert() {
         let alert = UIAlertController(
             title: "体力不足",
-            message: "体力已耗尽，请等待恢复。\n恢复时间：\(StaminaSystem.shared.staminaRecoveryTime() ?? "—")",
+            message: "体力已耗尽，请等待恢复。\n恢复时间：\(SaveManager.shared.staminaRecoveryTime() ?? "—")",
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "确定", style: .default))
