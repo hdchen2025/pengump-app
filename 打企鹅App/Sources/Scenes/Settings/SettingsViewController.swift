@@ -40,7 +40,7 @@ class SettingsViewController: UIViewController {
         view.backgroundColor = .clear
 
         let titleLabel = UILabel()
-        titleLabel.text = "⚙️ 设置"
+        titleLabel.text = isEnglish ? "⚙️ Settings" : "⚙️ 设置"
         titleLabel.font = .systemFont(ofSize: 28, weight: .bold)
         titleLabel.textColor = UIColor(red: 0.2, green: 0.3, blue: 0.5, alpha: 1.0)
         titleLabel.textAlignment = .center
@@ -103,7 +103,7 @@ class SettingsViewController: UIViewController {
 
         // 导航栏返回按钮
         let backButton = UIButton(type: .system)
-        backButton.setTitle("← 返回", for: .normal)
+        backButton.setTitle(isEnglish ? "← Back" : "← 返回", for: .normal)
         backButton.titleLabel?.font = .systemFont(ofSize: 16)
         backButton.setTitleColor(UIColor(red: 0.2, green: 0.5, blue: 0.9, alpha: 1.0), for: .normal)
         backButton.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
@@ -128,7 +128,7 @@ class SettingsViewController: UIViewController {
             ]),
             (.about, [
                 .version("v1.0.0"),
-                .about("打企鹅 - 像素弹弓休闲游戏"),
+                .about(isEnglish ? "Hit Penguin - Pixel Slingshot Game" : "打企鹅 - 像素弹弓休闲游戏"),
                 .rateApp,
                 .removeAds,
                 .privacy
