@@ -9,10 +9,11 @@ enum SettingsSection: Int, CaseIterable {
     case about
 
     var title: String {
+        let english = UserDefaults.standard.string(forKey: "game_language") == "English"
         switch self {
-        case .audio: return "声音设置"
-        case .language: return "语言"
-        case .about: return "关于"
+        case .audio: return english ? "Audio" : "声音设置"
+        case .language: return english ? "Language" : "语言"
+        case .about: return english ? "About" : "关于"
         }
     }
 }
@@ -86,6 +87,10 @@ class SettingsViewController: UIViewController {
 
     // MARK: - Setup
 
+    private var isEnglish: Bool {
+        UserDefaults.standard.string(forKey: "game_language") == "English"
+    }
+
     private func setupUI() {
         view.backgroundColor = UIColor(red: 0.9, green: 0.95, blue: 1.0, alpha: 1.0)
 
@@ -139,7 +144,8 @@ class SettingsViewController: UIViewController {
     }
 
     private func showLanguagePicker() {
-        let alert = UIAlertController(title: "选择语言", message: nil, preferredStyle: .actionSheet)
+        let alertTitle = isEnglish ? "Select Language" : "选择语言"
+        let alert = UIAlertController(title: alertTitle, message: nil, preferredStyle: .actionSheet)
 
         let languages = ["简体中文", "English"]
         for lang in languages {
@@ -155,7 +161,7 @@ class SettingsViewController: UIViewController {
             alert.addAction(action)
         }
 
-        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: isEnglish ? "Cancel" : "取消", style: .cancel))
 
         if let popover = alert.popoverPresentationController {
             popover.sourceView = tableView
@@ -167,11 +173,11 @@ class SettingsViewController: UIViewController {
 
     private func showRestartAlert() {
         let alert = UIAlertController(
-            title: "语言已更改",
-            message: "部分语言更改将在重启应用后生效。",
+            title: isEnglish ? "Language Changed" : "语言已更改",
+            message: isEnglish ? "Some changes will take effect after restarting the app." : "部分语言更改将在重启应用后生效。",
             preferredStyle: .alert
         )
-        alert.addAction(UIAlertAction(title: "确定", style: .default))
+        alert.addAction(UIAlertAction(title: isEnglish ? "OK" : "确定", style: .default))
         present(alert, animated: true)
     }
 
@@ -190,28 +196,28 @@ class SettingsViewController: UIViewController {
 
     private func showRemoveAdsPurchase() {
         let alert = UIAlertController(
-            title: "移除广告",
-            message: "一次性购买，永久移除所有广告。\n\n价格：¥25",
+            title: isEnglish ? "Remove Ads" : "移除广告",
+            message: isEnglish ? "One-time purchase, remove all ads permanently.\n\nPrice: ¥25" : "一次性购买，永久移除所有广告。\n\n价格：¥25",
             preferredStyle: .alert
         )
 
-        alert.addAction(UIAlertAction(title: "购买", style: .default) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: isEnglish ? "Purchase" : "购买", style: .default) { [weak self] _ in
             // TODO: 接入IAP购买
             self?.showComingSoonAlert()
         })
 
-        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: isEnglish ? "Cancel" : "取消", style: .cancel))
 
         present(alert, animated: true)
     }
 
     private func showComingSoonAlert() {
         let alert = UIAlertController(
-            title: "即将上线",
-            message: "内购功能正在准备中，敬请期待！",
+            title: isEnglish ? "Coming Soon" : "即将上线",
+            message: isEnglish ? "In-app purchases are being prepared. Stay tuned!" : "内购功能正在准备中，敬请期待！",
             preferredStyle: .alert
         )
-        alert.addAction(UIAlertAction(title: "确定", style: .default))
+        alert.addAction(UIAlertAction(title: isEnglish ? "OK" : "确定", style: .default))
         present(alert, animated: true)
     }
 }
@@ -239,7 +245,8 @@ extension SettingsViewController: UITableViewDataSource {
         switch item {
         case .musicSwitch:
             let cell = tableView.dequeueReusableCell(withIdentifier: "SwitchCell", for: indexPath) as! SwitchTableViewCell
-            cell.configure(title: "🎵 背景音乐", isOn: audioManager.isMusicEnabled) { isOn in
+            let title = isEnglish ? "🎵 Background Music" : "🎵 背景音乐"
+            cell.configure(title: title, isOn: audioManager.isMusicEnabled) { isOn in
                 audioManager.isMusicEnabled = isOn
                 if isOn {
                     audioManager.playMusic(.menu)
@@ -251,33 +258,32 @@ extension SettingsViewController: UITableViewDataSource {
 
         case .musicVolume:
             let cell = tableView.dequeueReusableCell(withIdentifier: "SliderCell", for: indexPath) as! SliderTableViewCell
-            cell.configure(title: "音乐音量", value: audioManager.musicVolume, icon: "🎵") { value in
+            let title = isEnglish ? "Music Volume" : "音乐音量"
+            cell.configure(title: title, value: audioManager.musicVolume, icon: "🎵") { value in
                 audioManager.musicVolume = value
             }
             return cell
 
         case .sfxSwitch:
             let cell = tableView.dequeueReusableCell(withIdentifier: "SwitchCell", for: indexPath) as! SwitchTableViewCell
-            cell.configure(title: "🔊 音效", isOn: audioManager.isSFXEnabled) { isOn in
+            let title = isEnglish ? "🔊 Sound Effects" : "🔊 音效"
+            cell.configure(title: title, isOn: audioManager.isSFXEnabled) { isOn in
                 audioManager.isSFXEnabled = isOn
             }
             return cell
 
         case .sfxVolume:
             let cell = tableView.dequeueReusableCell(withIdentifier: "SliderCell", for: indexPath) as! SliderTableViewCell
-            cell.configure(title: "音效音量", value: audioManager.sfxVolume, icon: "🔊") { value in
+            let title = isEnglish ? "SFX Volume" : "音效音量"
+            cell.configure(title: title, value: audioManager.sfxVolume, icon: "🔊") { value in
                 audioManager.sfxVolume = value
             }
             return cell
 
         case .language(let currentLang):
             let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
-            cell.textLabel?.text = "语言"
-            cell.detailTextLabel?.text = currentLang
-            cell.accessoryType = .disclosureIndicator
-
             var config = cell.defaultContentConfiguration()
-            config.text = "语言"
+            config.text = isEnglish ? "Language" : "语言"
             config.secondaryText = currentLang
             config.secondaryTextProperties.color = .gray
             cell.contentConfiguration = config
@@ -287,7 +293,7 @@ extension SettingsViewController: UITableViewDataSource {
         case .version(let version):
             let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
             var config = cell.defaultContentConfiguration()
-            config.text = "版本"
+            config.text = isEnglish ? "Version" : "版本"
             config.secondaryText = version
             config.secondaryTextProperties.color = .gray
             cell.contentConfiguration = config
@@ -309,7 +315,7 @@ extension SettingsViewController: UITableViewDataSource {
         case .rateApp:
             let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
             var config = cell.defaultContentConfiguration()
-            config.text = "⭐️ 给我们评分"
+            config.text = isEnglish ? "⭐️ Rate Us" : "⭐️ 给我们评分"
             config.textProperties.color = UIColor(red: 0.2, green: 0.5, blue: 0.9, alpha: 1.0)
             cell.contentConfiguration = config
             cell.accessoryType = .disclosureIndicator
@@ -319,14 +325,14 @@ extension SettingsViewController: UITableViewDataSource {
             let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
             if AdManager.shared.isAdsRemoved {
                 var config = cell.defaultContentConfiguration()
-                config.text = "🚫 已移除广告"
+                config.text = isEnglish ? "🚫 Ads Removed" : "🚫 已移除广告"
                 config.textProperties.color = .gray
                 cell.contentConfiguration = config
                 cell.selectionStyle = .none
             } else {
                 var config = cell.defaultContentConfiguration()
-                config.text = "🚫 移除广告"
-                config.secondaryText = "¥25 · 永久有效"
+                config.text = isEnglish ? "🚫 Remove Ads" : "🚫 移除广告"
+                config.secondaryText = isEnglish ? "¥25 · Permanent" : "¥25 · 永久有效"
                 config.secondaryTextProperties.color = UIColor(red: 1.0, green: 0.6, blue: 0.0, alpha: 1.0)
                 config.textProperties.color = UIColor(red: 0.2, green: 0.5, blue: 0.9, alpha: 1.0)
                 cell.contentConfiguration = config
@@ -337,7 +343,7 @@ extension SettingsViewController: UITableViewDataSource {
         case .privacy:
             let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
             var config = cell.defaultContentConfiguration()
-            config.text = "📜 隐私政策"
+            config.text = isEnglish ? "📜 Privacy Policy" : "📜 隐私政策"
             config.textProperties.color = UIColor(red: 0.2, green: 0.5, blue: 0.9, alpha: 1.0)
             cell.contentConfiguration = config
             cell.accessoryType = .disclosureIndicator

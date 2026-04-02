@@ -64,6 +64,11 @@ class AdManager {
         set { UserDefaults.standard.set(newValue, forKey: Keys.interstitialCounter) }
     }
 
+    /// 增加插屏广告计数器（每次关卡完成时调用）
+    func incrementInterstitialCounter() {
+        interstitialCounter += 1
+    }
+
     // MARK: - 广告单元ID配置
 
     // 注意：以下为虚拟广告单元ID，仅用于测试
@@ -333,8 +338,8 @@ class AdManager {
         // 去广告用户不显示
         guard !isAdsRemoved else { return false }
 
-        // 检查是否应该显示（每N关一次）
-        if level > 0 && level % interstitialInterval == 0 {
+        // 检查是否达到展示阈值
+        if interstitialCounter >= interstitialInterval {
             if isInterstitialLoaded {
                 presentInterstitial(from: viewController)
                 // 重置计数器

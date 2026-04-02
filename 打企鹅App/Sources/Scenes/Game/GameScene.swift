@@ -244,6 +244,7 @@ class GameScene: SKScene {
     private var penguinQueue: [SKSpriteNode] = []
     private var slingshotAnchorLeft: CGPoint = .zero
     private var slingshotAnchorRight: CGPoint = .zero
+    private var trailEmitter: SKEmitterNode?
 
     // MARK: - UI节点
 
@@ -742,6 +743,10 @@ class GameScene: SKScene {
         roundComboCount = 0
         launchTime = lastUpdateTime
 
+        // 附加飞行轨迹粒子
+        trailEmitter = ParticleEffects.shared.attachTrail(to: penguin)
+        penguin.addChild(trailEmitter!)
+
         // 皮筋弹回动画
         animateBandsRelease()
 
@@ -847,8 +852,10 @@ class GameScene: SKScene {
         guard let penguin = activePenguin,
               let pb = penguin.physicsBody else { return }
 
-        // 炸弹道具效果：对所有冰块造成爆炸伤害
+        // 炸弹道具效果：对所有冰块造成爆炸伤害（不return，继续反弹逻辑）
+        var bombTriggeredThisFrame = false
         if ItemSystem.shared.hasBomb {
+            bombTriggeredThisFrame = true
             for block in iceBlocks where !block.isBreaking {
                 let destroyed = block.takeDamage(block.maxDurability)
                 if destroyed {
@@ -862,46 +869,55 @@ class GameScene: SKScene {
                 }
             }
             ItemSystem.shared.consumeBomb()
-            return
-        }
-
-        let penguinSpeed = sqrt(pb.velocity.dx * pb.velocity.dx + pb.velocity.dy * pb.velocity.dy)
-
-        for block in iceBlocks {
-            guard !block.isBreaking else { continue }
-            let distance = hypot(penguin.position.x - block.position.x,
-                                 penguin.position.y - block.position.y)
-            if distance < 42 {
-                let damage = max(1, Int(penguinSpeed / 3))
-                let destroyed = block.takeDamage(damage)
-
-                // 企鹅反弹
+            // 炸弹触发后仍然应用反弹，让企鹅改变方向继续飞行
+            let penguinSpeed = sqrt(pb.velocity.dx * pb.velocity.dx + pb.velocity.dy * pb.velocity.dy)
+            if penguinSpeed > 1.0 {
                 let angle = atan2(pb.velocity.dy, pb.velocity.dx)
-                let newSpeed = penguinSpeed * physics.bounceDecay
+                let newSpeed = max(penguinSpeed * physics.bounceDecay, 3.0)
                 pb.velocity.dx = cos(angle) * newSpeed
                 pb.velocity.dy = sin(angle) * newSpeed
+            }
+        }
 
-                if destroyed {
-                    roundComboCount += 1
-                    addScoreForBlock(block)
-                    AudioManager.shared.playIceBreakSound()
-                    ParticleEffects.shared.playExplosion(at: block.position, in: self)
-                    let blockRef = block
-                    block.playBreakAnimation { [weak self] in
-                        self?.iceBlocks.removeAll { $0 === blockRef }
-                        self?.checkLevelComplete()
+        if !bombTriggeredThisFrame {
+            let penguinSpeed = sqrt(pb.velocity.dx * pb.velocity.dx + pb.velocity.dy * pb.velocity.dy)
+
+            for block in iceBlocks {
+                guard !block.isBreaking else { continue }
+                let distance = hypot(penguin.position.x - block.position.x,
+                                     penguin.position.y - block.position.y)
+                if distance < 42 {
+                    let damage = max(1, Int(penguinSpeed / 3))
+                    let destroyed = block.takeDamage(damage)
+
+                    // 企鹅反弹
+                    let angle = atan2(pb.velocity.dy, pb.velocity.dx)
+                    let newSpeed = penguinSpeed * physics.bounceDecay
+                    pb.velocity.dx = cos(angle) * newSpeed
+                    pb.velocity.dy = sin(angle) * newSpeed
+
+                    if destroyed {
+                        roundComboCount += 1
+                        addScoreForBlock(block)
+                        AudioManager.shared.playIceBreakSound()
+                        ParticleEffects.shared.playExplosion(at: block.position, in: self)
+                        let blockRef = block
+                        block.playBreakAnimation { [weak self] in
+                            self?.iceBlocks.removeAll { $0 === blockRef }
+                            self?.checkLevelComplete()
+                        }
+
+                        if block.blockType == .explosive {
+                            triggerExplosion(at: block.position, collidedBlock: block)
+                        }
                     }
 
-                    if block.blockType == .explosive {
-                        triggerExplosion(at: block.position, collidedBlock: block)
+                    if roundComboCount >= 2 {
+                        showComboEffect(count: roundComboCount, at: block.position)
+                        ParticleEffects.shared.playCombo(at: block.position, comboLevel: roundComboCount, in: self)
                     }
+                    break
                 }
-
-                if roundComboCount >= 2 {
-                    showComboEffect(count: roundComboCount, at: block.position)
-                    ParticleEffects.shared.playCombo(at: block.position, comboLevel: roundComboCount, in: self)
-                }
-                break
             }
         }
     }
@@ -1031,6 +1047,10 @@ class GameScene: SKScene {
     // MARK: - 回合结束
 
     private func onPenguinStopped() {
+        // 清理飞行轨迹粒子
+        trailEmitter?.removeFromParent()
+        trailEmitter = nil
+
         // 重置道具效果：将所有冰块恢复到初始位置
         if ItemSystem.shared.hasReset {
             resetIceBlocks()
@@ -1057,6 +1077,9 @@ class GameScene: SKScene {
     // MARK: - 关卡判定
 
     private func checkLevelComplete() {
+        // 每次关卡结算时增加插屏广告计数器
+        AdManager.shared.incrementInterstitialCounter()
+
         let activeBlocks = iceBlocks.filter { !$0.isBreaking && $0.parent != nil }
         if activeBlocks.isEmpty {
             showResult(success: true)
@@ -1171,6 +1194,11 @@ class GameScene: SKScene {
         }
 
         isUserInteractionEnabled = true
+
+        // 检查是否需要展示插屏广告
+        if let vc = view?.window?.rootViewController {
+            AdManager.shared.showInterstitialIfDue(forLevel: currentLevel, from: vc)
+        }
     }
 
     private func calculateStars() -> Int {
