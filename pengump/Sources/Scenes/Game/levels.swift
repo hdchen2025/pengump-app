@@ -34,13 +34,13 @@ struct LevelConfig {
     }
 }
 
-enum LevelTheme {
+enum LevelTheme: Equatable {
     case sunrise
     case glacier
     case aurora
 }
 
-enum LevelMotionStyle {
+enum LevelMotionStyle: Equatable {
     case none
     case glide
     case hover
