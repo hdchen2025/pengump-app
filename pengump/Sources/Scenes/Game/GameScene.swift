@@ -1,19 +1,20 @@
 import SpriteKit
+import UIKit
 
 // MARK: - 物理常量
 
 struct GamePhysics {
-    static let maxPullDistance: CGFloat = 120.0
-    static let minPullDistance: CGFloat = 20.0
+    static let maxPullDistance: CGFloat = 120
+    static let minPullDistance: CGFloat = 20
     static let launchSpeedMultiplier: CGFloat = 0.15
-    static let maxLaunchSpeed: CGFloat = 18.0
+    static let maxLaunchSpeed: CGFloat = 18
     static let gravity: CGFloat = 0.25
     static let airResistance: CGFloat = 0.99
-    static let rubberBandElasticity: CGFloat = 0.4
-    static let bounceDecay: CGFloat = 0.7
-    static let stopThreshold: CGFloat = 0.5
-    static let explosionRadius: CGFloat = 100.0
-    static let explosionDamageRatio: CGFloat = 0.5
+    static let bounceDecay: CGFloat = 0.72
+    static let stopThreshold: CGFloat = 0.55
+    static let explosionRadius: CGFloat = 104
+    static let explosionDamageRatio: CGFloat = 0.75
+    static let collisionCooldown: TimeInterval = 0.12
 }
 
 // MARK: - 得分常量
@@ -23,7 +24,9 @@ struct GameScore {
     static let crackedIceBlock: Int = 200
     static let explosiveIceBlock: Int = 300
     static let comboMultiplier: Double = 1.5
-    static let remainingPenguinBonus: Int = 200
+    static let remainingPenguinBonus: Int = 250
+    static let clearBonusBase: Int = 150
+    static let clearBonusStep: Int = 25
 }
 
 // MARK: - 企鹅飞行状态
@@ -37,7 +40,7 @@ enum PenguinFlightState {
 
 // MARK: - 冰块节点
 
-class IceBlockNode: SKSpriteNode {
+final class IceBlockNode: SKSpriteNode {
     var durability: Int = 1
     var maxDurability: Int = 1
     var blockType: IceBlockType = .normal
@@ -47,7 +50,7 @@ class IceBlockNode: SKSpriteNode {
         let color = IceBlockNode.colorForType(type)
         self.init(color: color, size: size)
         self.blockType = type
-        self.maxDurability = type.rawValue
+        self.maxDurability = IceBlockNode.durabilityForType(type)
         self.durability = self.maxDurability
         self.name = "iceBlock"
         self.anchorPoint = CGPoint(x: 0.5, y: 0.5)
@@ -55,29 +58,38 @@ class IceBlockNode: SKSpriteNode {
         setupPhysics(size: size)
     }
 
+    private static func durabilityForType(_ type: IceBlockType) -> Int {
+        switch type {
+        case .normal, .explosive:
+            return 1
+        case .cracked:
+            return 2
+        }
+    }
+
     private static func colorForType(_ type: IceBlockType) -> UIColor {
         switch type {
         case .normal:
-            return UIColor(red: 0.7, green: 0.9, blue: 1.0, alpha: 0.9)
+            return UIColor(red: 0.72, green: 0.9, blue: 1.0, alpha: 0.95)
         case .cracked:
-            return UIColor(red: 0.5, green: 0.75, blue: 0.95, alpha: 0.9)
+            return UIColor(red: 0.55, green: 0.8, blue: 0.97, alpha: 0.95)
         case .explosive:
-            return UIColor(red: 1.0, green: 0.4, blue: 0.4, alpha: 0.9)
+            return UIColor(red: 1.0, green: 0.48, blue: 0.45, alpha: 0.95)
         }
     }
 
     private func setupAppearance(type: IceBlockType) {
-        let blockShape = SKShapeNode(rectOf: CGSize(width: size.width - 4, height: size.height - 4), cornerRadius: 4)
+        let blockShape = SKShapeNode(rectOf: CGSize(width: size.width - 4, height: size.height - 4), cornerRadius: 5)
         blockShape.fillColor = IceBlockNode.colorForType(type)
-        blockShape.strokeColor = UIColor(white: 1.0, alpha: 0.6)
+        blockShape.strokeColor = UIColor(white: 1.0, alpha: 0.7)
         blockShape.lineWidth = 2
         blockShape.name = "blockShape"
         addChild(blockShape)
 
-        let highlight = SKShapeNode(rectOf: CGSize(width: size.width * 0.6, height: 5), cornerRadius: 2)
-        highlight.fillColor = UIColor(white: 1.0, alpha: 0.5)
+        let highlight = SKShapeNode(rectOf: CGSize(width: size.width * 0.58, height: 5), cornerRadius: 2)
+        highlight.fillColor = UIColor(white: 1.0, alpha: 0.55)
         highlight.strokeColor = .clear
-        highlight.position = CGPoint(x: 0, y: size.height * 0.3)
+        highlight.position = CGPoint(x: 0, y: size.height * 0.28)
         highlight.name = "highlight"
         addChild(highlight)
 
@@ -93,7 +105,7 @@ class IceBlockNode: SKSpriteNode {
 
     private func addCrackLines() {
         let crackColor = UIColor(red: 0.2, green: 0.5, blue: 0.7, alpha: 0.8)
-        for _ in 0..<3 {
+        for index in 0..<3 {
             let crack = SKShapeNode()
             let path = CGMutablePath()
             let startX = CGFloat.random(in: -size.width * 0.3 ... 0)
@@ -104,7 +116,7 @@ class IceBlockNode: SKSpriteNode {
             crack.path = path
             crack.strokeColor = crackColor
             crack.lineWidth = 1.5
-            crack.name = "crack"
+            crack.name = "crack-\(index)"
             crack.zPosition = 1
             addChild(crack)
         }
@@ -112,8 +124,8 @@ class IceBlockNode: SKSpriteNode {
 
     private func addExplosiveMarker() {
         let marker = SKShapeNode(circleOfRadius: 10)
-        marker.fillColor = UIColor(red: 1.0, green: 0.6, blue: 0.0, alpha: 0.9)
-        marker.strokeColor = UIColor(red: 0.8, green: 0.2, blue: 0.0, alpha: 1.0)
+        marker.fillColor = UIColor(red: 1.0, green: 0.67, blue: 0.12, alpha: 0.95)
+        marker.strokeColor = UIColor(red: 0.82, green: 0.28, blue: 0.08, alpha: 1.0)
         marker.lineWidth = 2
         marker.name = "explosiveMarker"
         addChild(marker)
@@ -121,43 +133,40 @@ class IceBlockNode: SKSpriteNode {
         let exclLabel = SKLabelNode(text: "!")
         exclLabel.fontSize = 14
         exclLabel.fontColor = .white
-        exclLabel.fontName = "BoldSystem"
-        exclLabel.name = "exclLabel"
+        exclLabel.fontName = "AvenirNext-Bold"
         exclLabel.position = CGPoint(x: 0, y: -5)
         marker.addChild(exclLabel)
     }
 
     private func setupPhysics(size: CGSize) {
         physicsBody = SKPhysicsBody(rectangleOf: CGSize(width: size.width - 2, height: size.height - 2), center: .zero)
-        physicsBody?.isDynamic = true
-        physicsBody?.mass = 1.0
-        physicsBody?.friction = 0.5
-        physicsBody?.restitution = 0.2
-        physicsBody?.categoryBitMask = 0b0001
-        physicsBody?.collisionBitMask = 0b0010 | 0b0100 | 0b1000
-        physicsBody?.contactTestBitMask = 0b0010
+        physicsBody?.isDynamic = false
+        physicsBody?.affectedByGravity = false
+        physicsBody?.allowsRotation = false
     }
 
     func takeDamage(_ amount: Int) -> Bool {
         durability -= amount
         if durability <= 0 {
             return true
-        } else {
-            if blockType == .cracked || blockType == .explosive {
-                childNode(withName: "crack")?.removeFromParent()
-                childNode(withName: "explosiveMarker")?.removeFromParent()
-                if let shape = childNode(withName: "blockShape") as? SKShapeNode {
-                    shape.fillColor = UIColor(red: 0.7, green: 0.9, blue: 1.0, alpha: 0.9)
-                }
-            }
-            flash()
-            return false
         }
+
+        if blockType == .cracked || blockType == .explosive {
+            enumerateChildNodes(withName: "crack-*") { node, _ in
+                node.removeFromParent()
+            }
+            childNode(withName: "explosiveMarker")?.removeFromParent()
+            if let shape = childNode(withName: "blockShape") as? SKShapeNode {
+                shape.fillColor = IceBlockNode.colorForType(.normal)
+            }
+        }
+        flash()
+        return false
     }
 
     func flash() {
         let whiteFlash = SKAction.sequence([
-            SKAction.colorize(with: .white, colorBlendFactor: 0.8, duration: 0.05),
+            SKAction.colorize(with: .white, colorBlendFactor: 0.85, duration: 0.05),
             SKAction.colorize(withColorBlendFactor: 0, duration: 0.1)
         ])
         run(whiteFlash)
@@ -167,14 +176,14 @@ class IceBlockNode: SKSpriteNode {
         guard !isBreaking else { return }
         isBreaking = true
 
-        let whiteFlash = SKAction.colorize(with: .white, colorBlendFactor: 1.0, duration: 0.05)
+        let whiteFlash = SKAction.colorize(with: .white, colorBlendFactor: 1, duration: 0.05)
         let shrink = SKAction.group([
-            SKAction.scale(to: 0.1, duration: 0.15),
-            SKAction.fadeOut(withDuration: 0.15)
+            SKAction.scale(to: 0.08, duration: 0.16),
+            SKAction.fadeOut(withDuration: 0.16)
         ])
-        let remove = SKAction.removeFromParent()
-        let sequence = SKAction.sequence([whiteFlash, shrink, remove])
-        run(sequence) { completion() }
+        run(SKAction.sequence([whiteFlash, shrink, .removeFromParent()])) {
+            completion()
+        }
 
         spawnFragments()
     }
@@ -187,88 +196,103 @@ class IceBlockNode: SKSpriteNode {
             fragment.fillColor = color
             fragment.strokeColor = UIColor(white: 1.0, alpha: 0.4)
             fragment.lineWidth = 1
-            fragment.position = self.position
-            fragment.zPosition = self.zPosition - 1
-
+            fragment.position = position
+            fragment.zPosition = zPosition - 1
             fragment.physicsBody = SKPhysicsBody(rectangleOf: CGSize(width: fragmentSize, height: fragmentSize))
             fragment.physicsBody?.isDynamic = true
             fragment.physicsBody?.mass = 0.1
             fragment.physicsBody?.applyImpulse(CGVector(dx: dx * 3, dy: dy * 3))
             fragment.physicsBody?.applyAngularImpulse(dx * 0.5)
-
             scene?.addChild(fragment)
 
             let fadeOut = SKAction.sequence([
-                SKAction.wait(forDuration: 0.3),
-                SKAction.fadeOut(withDuration: 0.3),
-                SKAction.removeFromParent()
+                .wait(forDuration: 0.3),
+                .fadeOut(withDuration: 0.3),
+                .removeFromParent()
             ])
             fragment.run(fadeOut)
         }
     }
 }
 
+private struct LevelPalette {
+    let sky: UIColor
+    let horizon: UIColor
+    let glow: UIColor
+    let accent: UIColor
+    let snow: UIColor
+}
+
+private struct VictoryBonusSummary {
+    let remainingPenguinBonus: Int
+    let clearBonus: Int
+
+    var total: Int {
+        remainingPenguinBonus + clearBonus
+    }
+}
+
 // MARK: - 游戏主场景
 
-class GameScene: SKScene {
+final class GameScene: SKScene {
 
-    // MARK: - 游戏配置
+    private let currentLevel: Int
+    private let levelConfig: LevelConfig
+    private let levelTheme: LevelTheme
+    private let scorePlan: LevelScorePlan
 
-    private let physics = GamePhysics.self
-    private let scoreConfig = GameScore.self
-
-    // MARK: - 游戏状态
-
-    private var currentLevel: Int = 1
-    private var penguinsRemaining: Int = 3
+    private var penguinsRemaining: Int
     private var score: Int = 0
     private var roundComboCount: Int = 0
     private var flightState: PenguinFlightState = .ready
     private var launchTime: TimeInterval = 0
-
-    // MARK: - 关卡配置
-
-    private var levelConfig: LevelConfig!
+    private var shotsFired: Int = 0
+    private var hasPresentedResult = false
     private var iceBlocks: [IceBlockNode] = []
+    private var lastBlockHitTimes: [ObjectIdentifier: TimeInterval] = [:]
 
-    // MARK: - 节点引用
-
+    private var backgroundNode = SKNode()
     private var slingshotBase: SKNode!
     private var leftBandNode: SKShapeNode!
     private var rightBandNode: SKShapeNode!
-    private var penguinNode: SKSpriteNode!
+    private var penguinNode: SKSpriteNode?
     private var trajectoryLine: SKShapeNode!
     private var activePenguin: SKSpriteNode?
     private var penguinQueue: [SKSpriteNode] = []
     private var slingshotAnchorLeft: CGPoint = .zero
     private var slingshotAnchorRight: CGPoint = .zero
     private var trailEmitter: SKEmitterNode?
-
-    // MARK: - UI节点
+    private var resultOverlay: SKNode?
 
     private var scoreLabel: SKLabelNode!
     private var levelLabel: SKLabelNode!
     private var penguinCountLabel: SKLabelNode!
-    private var hintLabel: SKLabelNode!
-    private var resultOverlay: SKNode?
-
-    // MARK: - 初始化
+    private var targetLabel: SKLabelNode!
+    private var bestScoreLabel: SKLabelNode!
+    private var hintLabel: SKLabelNode?
+    private var ruleLabel: SKLabelNode?
 
     init(level: Int) {
-        self.currentLevel = level
-        self.levelConfig = Levels.config(for: level)
-        self.penguinsRemaining = levelConfig.penguinCount
+        currentLevel = level
+        levelConfig = Levels.config(for: level)
+        levelTheme = Levels.theme(for: level)
+        scorePlan = Levels.scorePlan(for: levelConfig)
+        penguinsRemaining = levelConfig.penguinCount
         super.init(size: .zero)
-        self.backgroundColor = SKColor(red: 0.85, green: 0.95, blue: 1.0, alpha: 1.0)
+        backgroundColor = palette.sky
     }
 
     required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
     override func didMove(to view: SKView) {
         setupPauseNotifications()
-
+        setupBackground()
         setupPhysicsWorld()
         setupSlingshot()
         setupPenguinQueue()
@@ -279,23 +303,123 @@ class GameScene: SKScene {
         reloadSlingshot()
     }
 
+    private var palette: LevelPalette {
+        switch levelTheme {
+        case .sunrise:
+            return LevelPalette(
+                sky: UIColor(red: 0.96, green: 0.88, blue: 0.73, alpha: 1),
+                horizon: UIColor(red: 0.76, green: 0.91, blue: 0.97, alpha: 1),
+                glow: UIColor(red: 1.0, green: 0.74, blue: 0.45, alpha: 0.36),
+                accent: UIColor(red: 0.98, green: 0.63, blue: 0.33, alpha: 1),
+                snow: UIColor(white: 1.0, alpha: 0.8)
+            )
+        case .glacier:
+            return LevelPalette(
+                sky: UIColor(red: 0.75, green: 0.89, blue: 0.97, alpha: 1),
+                horizon: UIColor(red: 0.5, green: 0.79, blue: 0.94, alpha: 1),
+                glow: UIColor(red: 0.62, green: 0.91, blue: 1.0, alpha: 0.28),
+                accent: UIColor(red: 0.25, green: 0.62, blue: 0.88, alpha: 1),
+                snow: UIColor(white: 1.0, alpha: 0.92)
+            )
+        case .aurora:
+            return LevelPalette(
+                sky: UIColor(red: 0.16, green: 0.2, blue: 0.37, alpha: 1),
+                horizon: UIColor(red: 0.24, green: 0.48, blue: 0.65, alpha: 1),
+                glow: UIColor(red: 0.44, green: 0.98, blue: 0.84, alpha: 0.26),
+                accent: UIColor(red: 0.56, green: 0.95, blue: 0.72, alpha: 1),
+                snow: UIColor(white: 0.94, alpha: 0.85)
+            )
+        }
+    }
+
     // MARK: - 场景搭建
 
     private func setupPhysicsWorld() {
-        physicsWorld.gravity = CGVector(dx: 0, dy: -physics.gravity * 60)
-        physicsWorld.speed = 1.0
+        physicsWorld.gravity = CGVector(dx: 0, dy: -GamePhysics.gravity * 60)
+        physicsWorld.speed = 1
+    }
+
+    private func setupBackground() {
+        addChild(backgroundNode)
+
+        let skyNode = SKSpriteNode(color: palette.sky, size: CGSize(width: frame.width, height: frame.height))
+        skyNode.position = CGPoint(x: frame.midX, y: frame.midY)
+        skyNode.zPosition = -30
+        backgroundNode.addChild(skyNode)
+
+        let horizonNode = SKSpriteNode(color: palette.horizon, size: CGSize(width: frame.width, height: frame.height * 0.45))
+        horizonNode.position = CGPoint(x: frame.midX, y: frame.height * 0.22)
+        horizonNode.zPosition = -29
+        backgroundNode.addChild(horizonNode)
+
+        for (index, size, offsetX, offsetY) in [
+            (0, CGFloat(260), frame.width * 0.18, frame.height * 0.8),
+            (1, CGFloat(200), frame.width * 0.82, frame.height * 0.72)
+        ] {
+            let glow = SKShapeNode(circleOfRadius: size / 2)
+            glow.fillColor = palette.glow
+            glow.strokeColor = .clear
+            glow.position = CGPoint(x: offsetX, y: offsetY)
+            glow.zPosition = -28 + CGFloat(index)
+            backgroundNode.addChild(glow)
+        }
+
+        addIceberg(at: CGPoint(x: frame.width * 0.18, y: frame.height * 0.12), size: CGSize(width: 170, height: 90), depth: -24)
+        addIceberg(at: CGPoint(x: frame.width * 0.48, y: frame.height * 0.1), size: CGSize(width: 250, height: 110), depth: -23)
+        addIceberg(at: CGPoint(x: frame.width * 0.82, y: frame.height * 0.11), size: CGSize(width: 190, height: 80), depth: -22)
+
+        spawnSnow()
+    }
+
+    private func addIceberg(at position: CGPoint, size: CGSize, depth: CGFloat) {
+        let hill = SKShapeNode()
+        let path = CGMutablePath()
+        path.move(to: CGPoint(x: -size.width / 2, y: -size.height / 2))
+        path.addLine(to: CGPoint(x: -size.width * 0.2, y: size.height * 0.2))
+        path.addLine(to: CGPoint(x: 0, y: size.height / 2))
+        path.addLine(to: CGPoint(x: size.width * 0.22, y: size.height * 0.16))
+        path.addLine(to: CGPoint(x: size.width / 2, y: -size.height / 2))
+        path.closeSubpath()
+        hill.path = path
+        hill.fillColor = palette.snow.withAlphaComponent(0.88)
+        hill.strokeColor = UIColor(white: 1.0, alpha: 0.45)
+        hill.lineWidth = 2
+        hill.position = position
+        hill.zPosition = depth
+        backgroundNode.addChild(hill)
+    }
+
+    private func spawnSnow() {
+        for index in 0..<12 {
+            let flake = SKShapeNode(circleOfRadius: CGFloat.random(in: 1.5...3.2))
+            flake.fillColor = palette.snow
+            flake.strokeColor = .clear
+            flake.position = CGPoint(
+                x: CGFloat.random(in: 30...(frame.width - 30)),
+                y: CGFloat.random(in: frame.height * 0.4...(frame.height - 20))
+            )
+            flake.alpha = CGFloat.random(in: 0.45...0.95)
+            flake.zPosition = -15
+            backgroundNode.addChild(flake)
+
+            let drift = SKAction.sequence([
+                .moveBy(x: CGFloat((index % 2 == 0 ? 1 : -1) * 12), y: -18, duration: Double.random(in: 2.6...4.1)),
+                .moveBy(x: CGFloat((index % 2 == 0 ? -1 : 1) * 12), y: 18, duration: Double.random(in: 2.6...4.1))
+            ])
+            flake.run(.repeatForever(drift))
+        }
     }
 
     private func setupGround() {
         let ground = SKShapeNode(rectOf: CGSize(width: frame.width, height: 40))
-        ground.fillColor = UIColor(red: 0.85, green: 0.92, blue: 0.95, alpha: 1.0)
-        ground.strokeColor = UIColor(red: 0.7, green: 0.85, blue: 0.9, alpha: 1.0)
+        ground.fillColor = UIColor(red: 0.86, green: 0.92, blue: 0.96, alpha: 1)
+        ground.strokeColor = UIColor(red: 0.72, green: 0.84, blue: 0.91, alpha: 1)
         ground.lineWidth = 2
         ground.position = CGPoint(x: frame.width / 2, y: 20)
         ground.name = "ground"
+        ground.zPosition = 2
         ground.physicsBody = SKPhysicsBody(rectangleOf: CGSize(width: frame.width, height: 40))
         ground.physicsBody?.isDynamic = false
-        ground.physicsBody?.categoryBitMask = 0b1000
         addChild(ground)
     }
 
@@ -308,22 +432,22 @@ class GameScene: SKScene {
         let forkWidth: CGFloat = 50
 
         let leftArm = SKShapeNode(rectOf: CGSize(width: postWidth, height: forkHeight), cornerRadius: 3)
-        leftArm.fillColor = UIColor(red: 0.55, green: 0.27, blue: 0.07, alpha: 1.0)
-        leftArm.strokeColor = UIColor(red: 0.4, green: 0.2, blue: 0.05, alpha: 1.0)
+        leftArm.fillColor = UIColor(red: 0.55, green: 0.27, blue: 0.07, alpha: 1)
+        leftArm.strokeColor = UIColor(red: 0.4, green: 0.2, blue: 0.05, alpha: 1)
         leftArm.lineWidth = 2
         leftArm.position = CGPoint(x: -forkWidth / 2, y: postHeight / 2 + forkHeight / 2)
         leftArm.zPosition = 10
 
         let rightArm = SKShapeNode(rectOf: CGSize(width: postWidth, height: forkHeight), cornerRadius: 3)
-        rightArm.fillColor = UIColor(red: 0.55, green: 0.27, blue: 0.07, alpha: 1.0)
-        rightArm.strokeColor = UIColor(red: 0.4, green: 0.2, blue: 0.05, alpha: 1.0)
+        rightArm.fillColor = UIColor(red: 0.55, green: 0.27, blue: 0.07, alpha: 1)
+        rightArm.strokeColor = UIColor(red: 0.4, green: 0.2, blue: 0.05, alpha: 1)
         rightArm.lineWidth = 2
         rightArm.position = CGPoint(x: forkWidth / 2, y: postHeight / 2 + forkHeight / 2)
         rightArm.zPosition = 10
 
         let post = SKShapeNode(rectOf: CGSize(width: postWidth, height: postHeight), cornerRadius: 3)
-        post.fillColor = UIColor(red: 0.55, green: 0.27, blue: 0.07, alpha: 1.0)
-        post.strokeColor = UIColor(red: 0.4, green: 0.2, blue: 0.05, alpha: 1.0)
+        post.fillColor = UIColor(red: 0.55, green: 0.27, blue: 0.07, alpha: 1)
+        post.strokeColor = UIColor(red: 0.4, green: 0.2, blue: 0.05, alpha: 1)
         post.lineWidth = 2
         post.zPosition = 10
 
@@ -338,14 +462,14 @@ class GameScene: SKScene {
         slingshotAnchorRight = CGPoint(x: baseX + forkWidth / 2, y: baseY + postHeight / 2 + forkHeight)
 
         leftBandNode = SKShapeNode()
-        leftBandNode.strokeColor = UIColor(red: 0.6, green: 0.35, blue: 0.1, alpha: 1.0)
+        leftBandNode.strokeColor = UIColor(red: 0.65, green: 0.38, blue: 0.12, alpha: 1)
         leftBandNode.lineWidth = 4
         leftBandNode.lineCap = .round
         leftBandNode.zPosition = 5
         addChild(leftBandNode)
 
         rightBandNode = SKShapeNode()
-        rightBandNode.strokeColor = UIColor(red: 0.6, green: 0.35, blue: 0.1, alpha: 1.0)
+        rightBandNode.strokeColor = UIColor(red: 0.65, green: 0.38, blue: 0.12, alpha: 1)
         rightBandNode.lineWidth = 4
         rightBandNode.lineCap = .round
         rightBandNode.zPosition = 5
@@ -375,15 +499,15 @@ class GameScene: SKScene {
     }
 
     private func setupPenguinQueue() {
-        let queueY = frame.height * 0.10
+        let queueY = frame.height * 0.1
         let startX = frame.width * 0.06
         let spacing: CGFloat = 42
 
-        for i in 0..<penguinsRemaining {
+        for index in 0..<penguinsRemaining {
             let penguin = createPenguinNode()
-            penguin.position = CGPoint(x: startX + CGFloat(i) * spacing, y: queueY)
-            penguin.alpha = 0.6
-            penguin.setScale(0.85)
+            penguin.position = CGPoint(x: startX + CGFloat(index) * spacing, y: queueY)
+            penguin.alpha = 0.55
+            penguin.setScale(0.82)
             addChild(penguin)
             penguinQueue.append(penguin)
         }
@@ -394,8 +518,8 @@ class GameScene: SKScene {
         penguin.name = "penguin"
 
         let body = SKShapeNode(ellipseOf: CGSize(width: 26, height: 30))
-        body.fillColor = UIColor(red: 0.306, green: 0.804, blue: 0.769, alpha: 1.0)
-        body.strokeColor = UIColor(red: 0.173, green: 0.467, blue: 0.451, alpha: 1.0)
+        body.fillColor = UIColor(red: 0.31, green: 0.81, blue: 0.77, alpha: 1)
+        body.strokeColor = UIColor(red: 0.17, green: 0.47, blue: 0.45, alpha: 1)
         body.lineWidth = 2
         penguin.addChild(body)
 
@@ -412,7 +536,7 @@ class GameScene: SKScene {
         penguin.addChild(leftEye)
 
         let leftPupil = SKShapeNode(circleOfRadius: 2)
-        leftPupil.fillColor = UIColor(red: 0.1, green: 0.1, blue: 0.18, alpha: 1.0)
+        leftPupil.fillColor = UIColor(red: 0.1, green: 0.1, blue: 0.18, alpha: 1)
         leftPupil.strokeColor = .clear
         leftPupil.position = CGPoint(x: 1, y: 0)
         leftEye.addChild(leftPupil)
@@ -424,49 +548,49 @@ class GameScene: SKScene {
         penguin.addChild(rightEye)
 
         let rightPupil = SKShapeNode(circleOfRadius: 2)
-        rightPupil.fillColor = UIColor(red: 0.1, green: 0.1, blue: 0.18, alpha: 1.0)
+        rightPupil.fillColor = UIColor(red: 0.1, green: 0.1, blue: 0.18, alpha: 1)
         rightPupil.strokeColor = .clear
         rightPupil.position = CGPoint(x: 1, y: 0)
         rightEye.addChild(rightPupil)
 
         let leftBlush = SKShapeNode(ellipseOf: CGSize(width: 6, height: 4))
-        leftBlush.fillColor = UIColor(red: 1.0, green: 0.42, blue: 0.616, alpha: 0.5)
+        leftBlush.fillColor = UIColor(red: 1, green: 0.42, blue: 0.62, alpha: 0.5)
         leftBlush.strokeColor = .clear
         leftBlush.position = CGPoint(x: -10, y: 0)
         penguin.addChild(leftBlush)
 
         let rightBlush = SKShapeNode(ellipseOf: CGSize(width: 6, height: 4))
-        rightBlush.fillColor = UIColor(red: 1.0, green: 0.42, blue: 0.616, alpha: 0.5)
+        rightBlush.fillColor = UIColor(red: 1, green: 0.42, blue: 0.62, alpha: 0.5)
         rightBlush.strokeColor = .clear
         rightBlush.position = CGPoint(x: 10, y: 0)
         penguin.addChild(rightBlush)
 
         let beak = SKShapeNode(ellipseOf: CGSize(width: 8, height: 5))
-        beak.fillColor = UIColor(red: 1.0, green: 0.9, blue: 0.427, alpha: 1.0)
-        beak.strokeColor = UIColor(red: 0.8, green: 0.7, blue: 0.2, alpha: 1.0)
+        beak.fillColor = UIColor(red: 1, green: 0.9, blue: 0.43, alpha: 1)
+        beak.strokeColor = UIColor(red: 0.8, green: 0.7, blue: 0.2, alpha: 1)
         beak.lineWidth = 1
         beak.position = CGPoint(x: 0, y: -1)
         penguin.addChild(beak)
 
         let leftWing = SKShapeNode(ellipseOf: CGSize(width: 8, height: 14))
-        leftWing.fillColor = UIColor(red: 0.306, green: 0.804, blue: 0.769, alpha: 1.0)
-        leftWing.strokeColor = UIColor(red: 0.173, green: 0.467, blue: 0.451, alpha: 1.0)
+        leftWing.fillColor = UIColor(red: 0.31, green: 0.81, blue: 0.77, alpha: 1)
+        leftWing.strokeColor = UIColor(red: 0.17, green: 0.47, blue: 0.45, alpha: 1)
         leftWing.lineWidth = 1.5
         leftWing.position = CGPoint(x: -14, y: 0)
         leftWing.zRotation = 0.2
         penguin.addChild(leftWing)
 
         let rightWing = SKShapeNode(ellipseOf: CGSize(width: 8, height: 14))
-        rightWing.fillColor = UIColor(red: 0.306, green: 0.804, blue: 0.769, alpha: 1.0)
-        rightWing.strokeColor = UIColor(red: 0.173, green: 0.467, blue: 0.451, alpha: 1.0)
+        rightWing.fillColor = UIColor(red: 0.31, green: 0.81, blue: 0.77, alpha: 1)
+        rightWing.strokeColor = UIColor(red: 0.17, green: 0.47, blue: 0.45, alpha: 1)
         rightWing.lineWidth = 1.5
         rightWing.position = CGPoint(x: 14, y: 0)
         rightWing.zRotation = -0.2
         penguin.addChild(rightWing)
 
         let feather = SKShapeNode(rectOf: CGSize(width: 6, height: 10), cornerRadius: 2)
-        feather.fillColor = UIColor(red: 1.0, green: 0.9, blue: 0.427, alpha: 1.0)
-        feather.strokeColor = UIColor(red: 0.8, green: 0.7, blue: 0.2, alpha: 1.0)
+        feather.fillColor = UIColor(red: 1, green: 0.9, blue: 0.43, alpha: 1)
+        feather.strokeColor = UIColor(red: 0.8, green: 0.7, blue: 0.2, alpha: 1)
         feather.lineWidth = 1
         feather.position = CGPoint(x: 0, y: 17)
         penguin.addChild(feather)
@@ -475,21 +599,22 @@ class GameScene: SKScene {
     }
 
     private func reloadSlingshot() {
-        guard penguinNode == nil || flightState == .ready else { return }
-        guard penguinsRemaining > 0 else { return }
+        guard !hasPresentedResult else { return }
+        guard penguinNode == nil, activePenguin == nil, penguinsRemaining > 0 else { return }
 
-        penguinNode = createPenguinNode()
         let launchPos = CGPoint(x: slingshotBase.position.x, y: slingshotAnchorLeft.y)
-        penguinNode.position = launchPos
-        penguinNode.zPosition = 20
-        addChild(penguinNode)
+        let penguin = createPenguinNode()
+        penguin.position = launchPos
+        penguin.zPosition = 20
+        addChild(penguin)
+        penguinNode = penguin
         updateBandPositions(penguinPos: launchPos)
         flightState = .ready
     }
 
     private func setupTrajectoryLine() {
         trajectoryLine = SKShapeNode()
-        trajectoryLine.strokeColor = UIColor.gray.withAlphaComponent(0.4)
+        trajectoryLine.strokeColor = UIColor.gray.withAlphaComponent(0.45)
         trajectoryLine.lineWidth = 2
         trajectoryLine.isHidden = true
         trajectoryLine.zPosition = 15
@@ -497,77 +622,148 @@ class GameScene: SKScene {
     }
 
     private func setupUI() {
-        let backBtn = SKShapeNode(rectOf: CGSize(width: 80, height: 32), cornerRadius: 6)
-        backBtn.fillColor = UIColor(white: 0.3, alpha: 0.8)
-        backBtn.strokeColor = UIColor(white: 0.5, alpha: 0.8)
-        backBtn.lineWidth = 1
-        backBtn.position = CGPoint(x: 50, y: frame.height - 28)
-        backBtn.name = "backButton"
-        addChild(backBtn)
+        let backButton = makeButtonNode(width: 88, height: 34, name: "backButton", color: UIColor(white: 0.25, alpha: 0.8))
+        backButton.position = CGPoint(x: 56, y: frame.height - 30)
+        addChild(backButton)
 
         let backLabel = SKLabelNode(text: "← 返回")
         backLabel.fontSize = 13
         backLabel.fontColor = .white
-        backLabel.name = "backLabel"
-        backLabel.position = CGPoint(x: 0, y: -4)
-        backBtn.addChild(backLabel)
+        backLabel.fontName = "AvenirNext-DemiBold"
+        backLabel.verticalAlignmentMode = .center
+        backLabel.position = CGPoint(x: 0, y: 0)
+        backButton.addChild(backLabel)
 
-        scoreLabel = SKLabelNode(text: "分数: 0")
-        scoreLabel.fontSize = 22
-        scoreLabel.fontColor = UIColor(red: 0.2, green: 0.2, blue: 0.3, alpha: 1.0)
-        scoreLabel.fontName = "BoldSystem"
-        scoreLabel.name = "scoreLabel"
-        scoreLabel.position = CGPoint(x: frame.width / 2, y: frame.height - 40)
+        scoreLabel = makeHUDLabel(fontSize: 24, color: titleColor)
+        scoreLabel.text = "分数: 0"
+        scoreLabel.position = CGPoint(x: frame.midX, y: frame.height - 44)
         addChild(scoreLabel)
 
-        levelLabel = SKLabelNode(text: "第 \(currentLevel) 关")
-        levelLabel.fontSize = 18
-        levelLabel.fontColor = UIColor(red: 0.3, green: 0.4, blue: 0.5, alpha: 1.0)
-        levelLabel.name = "levelLabel"
-        levelLabel.position = CGPoint(x: frame.width / 2, y: frame.height - 68)
+        levelLabel = makeHUDLabel(fontSize: 18, color: secondaryTextColor)
+        levelLabel.text = "第 \(currentLevel) 关"
+        levelLabel.position = CGPoint(x: frame.midX, y: frame.height - 72)
         addChild(levelLabel)
 
-        penguinCountLabel = SKLabelNode(text: "🐧 × \(penguinsRemaining)")
-        penguinCountLabel.fontSize = 20
-        penguinCountLabel.name = "countLabel"
-        penguinCountLabel.position = CGPoint(x: frame.width - 55, y: frame.height - 40)
-        addChild(penguinCountLabel)
-
-        let targetLabel = SKLabelNode(text: "目标: \(levelConfig.targetScore)")
-        targetLabel.fontSize = 14
-        targetLabel.fontColor = UIColor(red: 0.4, green: 0.5, blue: 0.6, alpha: 1.0)
-        targetLabel.name = "targetLabel"
-        targetLabel.position = CGPoint(x: frame.width / 2, y: frame.height - 92)
+        targetLabel = makeHUDLabel(fontSize: 14, color: secondaryTextColor)
+        targetLabel.text = "目标: \(scorePlan.targetScore)"
+        targetLabel.position = CGPoint(x: frame.midX, y: frame.height - 96)
         addChild(targetLabel)
 
-        if let hint = levelConfig.hint {
-            hintLabel = SKLabelNode(text: hint)
-            hintLabel.fontSize = 16
-            hintLabel.fontColor = UIColor(red: 0.5, green: 0.6, blue: 0.7, alpha: 0.8)
-            hintLabel.name = "hintLabel"
-            hintLabel.position = CGPoint(x: frame.width / 2, y: frame.height * 0.45)
-            hintLabel.alpha = 0
-            addChild(hintLabel)
+        penguinCountLabel = makeHUDLabel(fontSize: 20, color: titleColor)
+        penguinCountLabel.text = "🐧 × \(penguinsRemaining)"
+        penguinCountLabel.position = CGPoint(x: frame.width - 58, y: frame.height - 42)
+        addChild(penguinCountLabel)
 
-            hintLabel.run(SKAction.sequence([
-                SKAction.wait(forDuration: 0.5),
-                SKAction.fadeIn(withDuration: 0.5),
-                SKAction.wait(forDuration: 3.0),
-                SKAction.fadeOut(withDuration: 1.0)
+        let bestScore = SaveManager.shared.record(for: currentLevel)?.score ?? 0
+        bestScoreLabel = makeHUDLabel(fontSize: 13, color: secondaryTextColor)
+        bestScoreLabel.text = "最佳: \(bestScore)"
+        bestScoreLabel.position = CGPoint(x: frame.width - 58, y: frame.height - 68)
+        addChild(bestScoreLabel)
+
+        if let ruleText = ruleText() {
+            let label = makeHUDLabel(fontSize: 12, color: palette.accent)
+            label.text = ruleText
+            label.position = CGPoint(x: frame.width - 76, y: frame.height - 92)
+            addChild(label)
+            ruleLabel = label
+        }
+
+        let hintText = combinedHintText()
+        if !hintText.isEmpty {
+            let label = makeHUDLabel(fontSize: 16, color: secondaryTextColor.withAlphaComponent(0.9))
+            label.text = hintText
+            label.position = CGPoint(x: frame.midX, y: frame.height * 0.46)
+            label.alpha = 0
+            addChild(label)
+            hintLabel = label
+            label.run(.sequence([
+                .wait(forDuration: 0.5),
+                .fadeIn(withDuration: 0.4),
+                .wait(forDuration: 2.8),
+                .fadeOut(withDuration: 0.8)
             ]))
+        }
+    }
+
+    private var titleColor: UIColor {
+        levelTheme == .aurora ? UIColor(white: 0.97, alpha: 1) : UIColor(red: 0.2, green: 0.23, blue: 0.33, alpha: 1)
+    }
+
+    private var secondaryTextColor: UIColor {
+        levelTheme == .aurora ? UIColor(red: 0.84, green: 0.93, blue: 0.98, alpha: 1) : UIColor(red: 0.34, green: 0.42, blue: 0.52, alpha: 1)
+    }
+
+    private func makeHUDLabel(fontSize: CGFloat, color: UIColor) -> SKLabelNode {
+        let label = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
+        label.fontSize = fontSize
+        label.fontColor = color
+        label.verticalAlignmentMode = .center
+        return label
+    }
+
+    private func makeButtonNode(width: CGFloat, height: CGFloat, name: String, color: UIColor) -> SKShapeNode {
+        let node = SKShapeNode(rectOf: CGSize(width: width, height: height), cornerRadius: 10)
+        node.fillColor = color
+        node.strokeColor = UIColor(white: 1, alpha: 0.35)
+        node.lineWidth = 1.5
+        node.name = name
+        return node
+    }
+
+    private func combinedHintText() -> String {
+        let baseHint = levelConfig.hint ?? ""
+        switch Levels.motionStyle(for: currentLevel) {
+        case .none:
+            return baseHint
+        case .glide:
+            return baseHint.isEmpty ? "移动靶会左右滑行，等一拍再出手。" : "\(baseHint)  移动靶会左右滑行。"
+        case .hover:
+            return baseHint.isEmpty ? "悬浮靶会上下浮动，抓住停顿瞬间。" : "\(baseHint)  悬浮靶会上下浮动。"
+        }
+    }
+
+    private func ruleText() -> String? {
+        switch Levels.motionStyle(for: currentLevel) {
+        case .none:
+            return nil
+        case .glide:
+            return "移动靶"
+        case .hover:
+            return "悬浮靶"
         }
     }
 
     private func setupIceBlocks() {
         iceBlocks.removeAll()
-        for config in levelConfig.iceBlocks {
+        for (index, config) in levelConfig.iceBlocks.enumerated() {
             let blockSize: CGFloat = 48
             let block = IceBlockNode(type: config.type, size: CGSize(width: blockSize, height: blockSize))
-            let pos = CGPoint(x: frame.width * config.x, y: frame.height * config.y)
-            block.position = pos
+            block.position = CGPoint(x: frame.width * config.x, y: frame.height * config.y)
             block.zPosition = 8
             addChild(block)
+            applyMotionIfNeeded(to: block, index: index)
             iceBlocks.append(block)
+        }
+    }
+
+    private func applyMotionIfNeeded(to block: IceBlockNode, index: Int) {
+        switch Levels.motionStyle(for: currentLevel) {
+        case .none:
+            return
+        case .glide:
+            let amplitude: CGFloat = currentLevel >= 13 ? 26 : 18
+            let move = SKAction.sequence([
+                .moveBy(x: amplitude * (index.isMultiple(of: 2) ? 1 : -1), y: 0, duration: 1.8 + Double(index % 3) * 0.18),
+                .moveBy(x: amplitude * (index.isMultiple(of: 2) ? -1 : 1), y: 0, duration: 1.8 + Double(index % 3) * 0.18)
+            ])
+            block.run(.repeatForever(move), withKey: "targetMotion")
+        case .hover:
+            let amplitude: CGFloat = currentLevel >= 15 ? 22 : 16
+            let move = SKAction.sequence([
+                .moveBy(x: 0, y: amplitude * (index.isMultiple(of: 2) ? 1 : -1), duration: 1.4 + Double(index % 4) * 0.16),
+                .moveBy(x: 0, y: amplitude * (index.isMultiple(of: 2) ? -1 : 1), duration: 1.4 + Double(index % 4) * 0.16)
+            ])
+            block.run(.repeatForever(move), withKey: "targetMotion")
         }
     }
 
@@ -577,35 +773,28 @@ class GameScene: SKScene {
         guard let touch = touches.first else { return }
         let location = touch.location(in: self)
 
-        // 结果页面触摸处理
         if let overlay = resultOverlay {
             let overlayLocation = touch.location(in: overlay)
-            if let nextBtn = overlay.childNode(withName: "nextButton"),
-               nextBtn.frame.insetBy(dx: -10, dy: -10).contains(overlayLocation) {
+            if didTap(nodeNamed: "nextButton", at: overlayLocation, in: overlay) {
                 goToNextLevel()
                 return
             }
-            if let retryBtn = overlay.childNode(withName: "retryButton"),
-               retryBtn.frame.insetBy(dx: -10, dy: -10).contains(overlayLocation) {
+            if didTap(nodeNamed: "retryButton", at: overlayLocation, in: overlay) {
                 retryLevel()
                 return
             }
-            if let backBtn = overlay.childNode(withName: "resultBackButton"),
-               backBtn.frame.insetBy(dx: -10, dy: -10).contains(overlayLocation) {
+            if didTap(nodeNamed: "resultBackButton", at: overlayLocation, in: overlay) {
                 dismiss(animated: true)
                 return
             }
             return
         }
 
-        // 返回按钮
-        if let backBtn = childNode(withName: "backButton"),
-           backBtn.frame.insetBy(dx: -10, dy: -10).contains(location) {
+        if didTap(nodeNamed: "backButton", at: location, in: self) {
             dismiss(animated: true)
             return
         }
 
-        // 开始瞄准
         if flightState == .ready,
            let penguin = penguinNode,
            penguin.frame.insetBy(dx: -20, dy: -20).contains(location) {
@@ -622,21 +811,20 @@ class GameScene: SKScene {
         let dx = location.x - anchorPos.x
         let dy = location.y - anchorPos.y
         var distance = sqrt(dx * dx + dy * dy)
-        distance = min(distance, physics.maxPullDistance)
+        distance = min(distance, GamePhysics.maxPullDistance)
 
         var angle = atan2(dy, dx)
-        let maxAngle: CGFloat = .pi * 0.85
-        if angle > 0 { angle = min(angle, maxAngle) }
-        else { angle = max(angle, -maxAngle) }
+        let maxAngle: CGFloat = .pi * 0.88
+        angle = min(max(angle, -maxAngle), maxAngle)
 
-        let pullX = anchorPos.x - cos(angle) * distance
-        let pullY = anchorPos.y - sin(angle) * distance
-        let clampedPos = CGPoint(x: pullX, y: pullY)
+        let pullX = anchorPos.x + cos(angle) * distance
+        let pullY = anchorPos.y + sin(angle) * distance
+        let pulledPosition = CGPoint(x: pullX, y: pullY)
 
-        penguinNode?.position = clampedPos
-        updateBandPositions(penguinPos: clampedPos)
+        penguinNode?.position = pulledPosition
+        updateBandPositions(penguinPos: pulledPosition)
 
-        if distance >= physics.minPullDistance {
+        if distance >= GamePhysics.minPullDistance {
             drawTrajectory()
             trajectoryLine.isHidden = false
         } else {
@@ -654,7 +842,7 @@ class GameScene: SKScene {
 
         trajectoryLine.isHidden = true
 
-        if distance < physics.minPullDistance {
+        if distance < GamePhysics.minPullDistance {
             let restore = SKAction.move(to: anchorPos, duration: 0.2)
             restore.timingMode = .easeOut
             penguinNode?.run(restore)
@@ -670,6 +858,17 @@ class GameScene: SKScene {
         touchesEnded(touches, with: event)
     }
 
+    private func didTap(nodeNamed name: String, at location: CGPoint, in container: SKNode) -> Bool {
+        var candidate: SKNode? = container.atPoint(location)
+        while let node = candidate {
+            if node.name == name {
+                return true
+            }
+            candidate = node.parent
+        }
+        return false
+    }
+
     // MARK: - 发射逻辑
 
     private func drawTrajectory() {
@@ -679,31 +878,27 @@ class GameScene: SKScene {
         let dx = anchorPos.x - penguin.position.x
         let dy = anchorPos.y - penguin.position.y
 
-        var speed = sqrt(dx * dx + dy * dy) * physics.launchSpeedMultiplier
-        speed = min(speed, physics.maxLaunchSpeed)
+        var speed = sqrt(dx * dx + dy * dy) * GamePhysics.launchSpeedMultiplier
+        speed = min(speed, GamePhysics.maxLaunchSpeed)
 
         let angle = atan2(dy, dx)
-        var vx = cos(angle) * speed
-        var vy = sin(angle) * speed
-
+        var velocityX = cos(angle) * speed
+        var velocityY = sin(angle) * speed
         var x = penguin.position.x
         var y = penguin.position.y
 
         let path = CGMutablePath()
-        var firstPoint = true
+        path.move(to: CGPoint(x: x, y: y))
 
-        for _ in 0..<15 {
-            if firstPoint {
-                path.move(to: CGPoint(x: x, y: y))
-                firstPoint = false
-            } else {
-                path.addLine(to: CGPoint(x: x, y: y))
+        for _ in 0..<16 {
+            velocityX *= GamePhysics.airResistance
+            velocityY = velocityY * GamePhysics.airResistance - GamePhysics.gravity
+            x += velocityX * 3
+            y += velocityY * 3
+            if y < 0 {
+                break
             }
-            vx *= physics.airResistance
-            vy = vy * physics.airResistance - physics.gravity
-            x += vx * 3
-            y += vy * 3
-            if y < 0 { break }
+            path.addLine(to: CGPoint(x: x, y: y))
         }
 
         trajectoryLine.path = path
@@ -716,20 +911,22 @@ class GameScene: SKScene {
         let dx = anchorPos.x - penguin.position.x
         let dy = anchorPos.y - penguin.position.y
 
-        var speed = sqrt(dx * dx + dy * dy) * physics.launchSpeedMultiplier
-        speed = min(speed, physics.maxLaunchSpeed)
+        var speed = sqrt(dx * dx + dy * dy) * GamePhysics.launchSpeedMultiplier
+        speed = min(speed, GamePhysics.maxLaunchSpeed)
 
         let angle = atan2(dy, dx)
-        let vx = cos(angle) * speed
-        let vy = sin(angle) * speed
+        let velocityX = cos(angle) * speed
+        let velocityY = sin(angle) * speed
 
-        penguin.physicsBody = SKPhysicsBody(circleOfRadius: 16)
-        penguin.physicsBody?.isDynamic = true
-        penguin.physicsBody?.mass = 1.0
-        penguin.physicsBody?.categoryBitMask = 0b0010
-        penguin.physicsBody?.collisionBitMask = 0b0001 | 0b0100 | 0b1000
-        penguin.physicsBody?.contactTestBitMask = 0b0001
-        penguin.physicsBody?.applyImpulse(CGVector(dx: vx, dy: vy))
+        let body = SKPhysicsBody(circleOfRadius: 16)
+        body.isDynamic = true
+        body.mass = 1
+        body.linearDamping = 0.22
+        body.friction = 0.3
+        body.restitution = 0.7
+        body.usesPreciseCollisionDetection = true
+        penguin.physicsBody = body
+        penguin.physicsBody?.applyImpulse(CGVector(dx: velocityX, dy: velocityY))
         penguin.physicsBody?.allowsRotation = true
 
         activePenguin = penguin
@@ -737,104 +934,99 @@ class GameScene: SKScene {
         flightState = .flying
         roundComboCount = 0
         launchTime = CACurrentMediaTime()
+        shotsFired += 1
+        lastBlockHitTimes.removeAll()
 
-        // 附加飞行轨迹粒子
         trailEmitter = ParticleEffects.shared.attachTrail(to: penguin)
-        penguin.addChild(trailEmitter!)
+        if let trailEmitter {
+            penguin.addChild(trailEmitter)
+        }
 
-        // 皮筋弹回动画
         animateBandsRelease()
-
-        // 播放发射音效
         AudioManager.shared.playLaunchSound()
+        AudioManager.shared.playPenguinFlySound()
 
-        // 更新队列
         penguinsRemaining -= 1
         updatePenguinCountDisplay()
-        if !penguinQueue.isEmpty {
-            penguinQueue.removeFirst()
-            let queueY = frame.height * 0.10
-            let startX = frame.width * 0.06
-            let spacing: CGFloat = 42
-            for (i, p) in penguinQueue.enumerated() {
-                let move = SKAction.move(to: CGPoint(x: startX + CGFloat(i) * spacing, y: queueY), duration: 0.3)
-                move.timingMode = .easeOut
-                p.run(move)
-            }
+        updateQueueDisplayAfterLaunch()
+
+        if let ruleLabel, ruleLabel.alpha > 0.1 {
+            ruleLabel.run(.fadeAlpha(to: 0.25, duration: 0.25))
+        }
+    }
+
+    private func updateQueueDisplayAfterLaunch() {
+        guard !penguinQueue.isEmpty else { return }
+        penguinQueue.removeFirst()
+        let queueY = frame.height * 0.1
+        let startX = frame.width * 0.06
+        let spacing: CGFloat = 42
+
+        for (index, penguin) in penguinQueue.enumerated() {
+            let move = SKAction.move(to: CGPoint(x: startX + CGFloat(index) * spacing, y: queueY), duration: 0.25)
+            move.timingMode = .easeOut
+            penguin.run(move)
         }
     }
 
     private func animateBandsRelease() {
         let anchorPos = CGPoint(x: slingshotBase.position.x, y: slingshotAnchorLeft.y)
-
-        let shrinkLeft = SKAction.move(to: CGPoint(
-            x: (slingshotAnchorLeft.x + anchorPos.x) / 2,
-            y: slingshotAnchorLeft.y - 10
-        ), duration: 0.08)
-        shrinkLeft.timingMode = .easeIn
-
-        let shrinkRight = SKAction.move(to: CGPoint(
-            x: (slingshotAnchorRight.x + anchorPos.x) / 2,
-            y: slingshotAnchorRight.y - 10
-        ), duration: 0.08)
-        shrinkRight.timingMode = .easeIn
-
-        let restoreLeft = SKAction.move(to: slingshotAnchorLeft, duration: 0.12)
-        restoreLeft.timingMode = .easeOut
-
-        let restoreRight = SKAction.move(to: slingshotAnchorRight, duration: 0.12)
-        restoreRight.timingMode = .easeOut
-
-        leftBandNode.run(SKAction.sequence([shrinkLeft, restoreLeft]))
-        rightBandNode.run(SKAction.sequence([shrinkRight, restoreRight]))
+        leftBandNode.run(.sequence([
+            .fadeAlpha(to: 0.25, duration: 0.06),
+            .fadeAlpha(to: 1.0, duration: 0.12)
+        ]))
+        rightBandNode.run(.sequence([
+            .fadeAlpha(to: 0.25, duration: 0.06),
+            .fadeAlpha(to: 1.0, duration: 0.12)
+        ]))
         updateBandPositions(penguinPos: anchorPos)
     }
 
     // MARK: - 每帧更新
 
     override func update(_ currentTime: TimeInterval) {
-        guard let penguin = activePenguin,
-              let pb = penguin.physicsBody else { return }
-
-        // 企鹅旋转跟随速度方向
-        let vx = pb.velocity.dx
-        let vy = pb.velocity.dy
-        let speed = sqrt(vx * vx + vy * vy)
-        if speed > 1.0 {
-            let angle = atan2(vy, vx)
-            penguin.zRotation = angle
+        guard !hasPresentedResult,
+              let penguin = activePenguin,
+              let body = penguin.physicsBody else {
+            return
         }
 
-        // 边界反弹（左/右/上）
+        let velocityX = body.velocity.dx
+        let velocityY = body.velocity.dy
+        let speed = sqrt(velocityX * velocityX + velocityY * velocityY)
+        if speed > 1 {
+            penguin.zRotation = atan2(velocityY, velocityX)
+        }
+
         if penguin.position.x < 20 {
             penguin.position.x = 20
-            pb.velocity.dx = abs(pb.velocity.dx) * physics.bounceDecay
+            body.velocity.dx = abs(body.velocity.dx) * GamePhysics.bounceDecay
         }
         if penguin.position.x > frame.width - 20 {
             penguin.position.x = frame.width - 20
-            pb.velocity.dx = -abs(pb.velocity.dx) * physics.bounceDecay
+            body.velocity.dx = -abs(body.velocity.dx) * GamePhysics.bounceDecay
         }
         if penguin.position.y > frame.height - 20 {
             penguin.position.y = frame.height - 20
-            pb.velocity.dy = -abs(pb.velocity.dy) * physics.bounceDecay
+            body.velocity.dy = -abs(body.velocity.dy) * GamePhysics.bounceDecay
         }
 
-        // 企鹅停止判定
         let timeSinceLaunch = currentTime - launchTime
-        if timeSinceLaunch > 10.0 && speed < physics.stopThreshold {
-            // 超时强制停止（企鹅被卡住时触发）
-            penguin.physicsBody = nil
-            penguin.removeFromParent()
-            activePenguin = nil
-            flightState = .stopped
-            onPenguinStopped()
-        } else if speed < physics.stopThreshold && penguin.position.y < slingshotBase.position.y + 50 {
-            penguin.physicsBody = nil
-            penguin.removeFromParent()
-            activePenguin = nil
-            flightState = .stopped
-            onPenguinStopped()
+        let shouldStopForTimeout = timeSinceLaunch > 10 && speed < GamePhysics.stopThreshold
+        let shouldStopNearGround = speed < GamePhysics.stopThreshold && penguin.position.y < slingshotBase.position.y + 50
+        let shouldStopOffscreen = penguin.position.y < -40
+
+        if shouldStopForTimeout || shouldStopNearGround || shouldStopOffscreen {
+            finishCurrentFlight()
         }
+    }
+
+    private func finishCurrentFlight() {
+        activePenguin?.physicsBody = nil
+        activePenguin?.removeFromParent()
+        activePenguin = nil
+        flightState = .stopped
+        onPenguinStopped()
     }
 
     // MARK: - 物理碰撞
@@ -844,101 +1036,127 @@ class GameScene: SKScene {
     }
 
     private func checkPenguinCollisions() {
-        guard let penguin = activePenguin,
-              let pb = penguin.physicsBody else { return }
+        guard !hasPresentedResult,
+              let penguin = activePenguin,
+              let body = penguin.physicsBody else {
+            return
+        }
 
-        let penguinSpeed = sqrt(pb.velocity.dx * pb.velocity.dx + pb.velocity.dy * pb.velocity.dy)
+        let penguinSpeed = sqrt(body.velocity.dx * body.velocity.dx + body.velocity.dy * body.velocity.dy)
+        let timestamp = CACurrentMediaTime()
 
-        for block in iceBlocks {
-            guard !block.isBreaking else { continue }
-            let distance = hypot(penguin.position.x - block.position.x,
-                                 penguin.position.y - block.position.y)
-            if distance < 42 {
-                let damage = max(1, Int(penguinSpeed / 3))
-                let destroyed = block.takeDamage(damage)
-
-                // 企鹅反弹
-                let angle = atan2(pb.velocity.dy, pb.velocity.dx)
-                let newSpeed = penguinSpeed * physics.bounceDecay
-                pb.velocity.dx = cos(angle) * newSpeed
-                pb.velocity.dy = sin(angle) * newSpeed
-
-                if destroyed {
-                    roundComboCount += 1
-                    addScoreForBlock(block)
-                    AudioManager.shared.playIceBreakSound()
-                    ParticleEffects.shared.playExplosion(at: block.position, in: self)
-                    let blockRef = block
-                    block.playBreakAnimation { [weak self] in
-                        self?.iceBlocks.removeAll { $0 === blockRef }
-                        self?.checkLevelComplete()
-                    }
-
-                    if block.blockType == .explosive {
-                        triggerExplosion(at: block.position, collidedBlock: block)
-                    }
-                }
-
-                if roundComboCount >= 2 {
-                    showComboEffect(count: roundComboCount, at: block.position)
-                    ParticleEffects.shared.playCombo(at: block.position, in: self)
-                }
-                break
+        for block in iceBlocks where !block.isBreaking && block.parent != nil {
+            let identifier = ObjectIdentifier(block)
+            if let lastHitTime = lastBlockHitTimes[identifier], timestamp - lastHitTime < GamePhysics.collisionCooldown {
+                continue
             }
+
+            let distance = hypot(penguin.position.x - block.position.x, penguin.position.y - block.position.y)
+            if distance > 42 {
+                continue
+            }
+
+            lastBlockHitTimes[identifier] = timestamp
+
+            let damage = max(1, Int(penguinSpeed / 4.2))
+            let destroyed = block.takeDamage(damage)
+            bouncePenguinAway(from: block, speed: penguinSpeed)
+
+            if destroyed {
+                destroyBlock(block, triggerLinkedExplosion: true)
+            } else {
+                AudioManager.shared.playIceHitSound()
+            }
+
+            break
         }
     }
 
-    private func triggerExplosion(at position: CGPoint, collidedBlock: IceBlockNode? = nil) {
-        let explosionNode = SKShapeNode(circleOfRadius: physics.explosionRadius)
-        explosionNode.fillColor = UIColor(red: 1.0, green: 0.5, blue: 0.0, alpha: 0.4)
-        explosionNode.strokeColor = UIColor(red: 1.0, green: 0.8, blue: 0.0, alpha: 0.8)
-        explosionNode.lineWidth = 3
-        explosionNode.position = position
-        explosionNode.zPosition = 30
-        explosionNode.alpha = 0
-        addChild(explosionNode)
+    private func bouncePenguinAway(from block: IceBlockNode, speed: CGFloat) {
+        guard let penguin = activePenguin, let body = penguin.physicsBody else { return }
+
+        var normal = CGVector(dx: penguin.position.x - block.position.x, dy: penguin.position.y - block.position.y)
+        let magnitude = sqrt(normal.dx * normal.dx + normal.dy * normal.dy)
+        if magnitude > 0.001 {
+            normal.dx /= magnitude
+            normal.dy /= magnitude
+        } else {
+            normal = CGVector(dx: 1, dy: 1)
+        }
+
+        let newSpeed = max(4, speed * GamePhysics.bounceDecay)
+        body.velocity = CGVector(dx: normal.dx * newSpeed, dy: normal.dy * newSpeed)
+    }
+
+    private func destroyBlock(_ block: IceBlockNode, triggerLinkedExplosion: Bool) {
+        guard block.parent != nil, !block.isBreaking else { return }
+
+        roundComboCount += 1
+        let blockPosition = block.position
+        let isExplosiveBlock = block.blockType == .explosive
+
+        addScoreForBlock(block)
+        AudioManager.shared.playIceBreakSound()
+        ParticleEffects.shared.playExplosion(at: blockPosition, in: self)
+
+        if roundComboCount >= 2 {
+            showComboEffect(count: roundComboCount, at: blockPosition)
+            ParticleEffects.shared.playCombo(at: blockPosition, in: self)
+            AudioManager.shared.playComboSound()
+        }
+
+        let blockRef = block
+        block.playBreakAnimation { [weak self] in
+            self?.iceBlocks.removeAll { $0 === blockRef }
+            self?.checkLevelComplete()
+        }
+
+        if isExplosiveBlock && triggerLinkedExplosion {
+            triggerExplosion(at: blockPosition, collidedBlock: block)
+        }
+    }
+
+    private func triggerExplosion(at position: CGPoint, collidedBlock: IceBlockNode?) {
+        let blast = SKShapeNode(circleOfRadius: GamePhysics.explosionRadius)
+        blast.fillColor = UIColor(red: 1.0, green: 0.55, blue: 0.0, alpha: 0.35)
+        blast.strokeColor = UIColor(red: 1.0, green: 0.82, blue: 0.0, alpha: 0.82)
+        blast.lineWidth = 3
+        blast.position = position
+        blast.zPosition = 30
+        blast.alpha = 0
+        addChild(blast)
 
         AudioManager.shared.playExplosionSound()
 
-        let expand = SKAction.scale(to: 1.5, duration: 0.15)
+        let expand = SKAction.scale(to: 1.45, duration: 0.16)
         expand.timingMode = .easeOut
-        let fadeOut = SKAction.fadeOut(withDuration: 0.15)
-        let remove = SKAction.removeFromParent()
-        explosionNode.run(SKAction.sequence([
-            SKAction.fadeIn(withDuration: 0.03),
-            SKAction.group([expand, fadeOut]),
-            remove
+        blast.run(.sequence([
+            .fadeIn(withDuration: 0.03),
+            .group([expand, .fadeOut(withDuration: 0.16)]),
+            .removeFromParent()
         ]))
 
-        for block in iceBlocks where !block.isBreaking {
-            if let collided = collidedBlock, block === collided { continue }
-            let dist = hypot(block.position.x - position.x, block.position.y - position.y)
-            if dist < physics.explosionRadius && dist > 0 {
-                let damage = max(1, Int(ceil(Float(block.maxDurability) * Float(physics.explosionDamageRatio))))
-                let destroyed = block.takeDamage(damage)
-                if destroyed {
-                    roundComboCount += 1
-                    addScoreForBlock(block)
-                    AudioManager.shared.playIceBreakSound()
-                    ParticleEffects.shared.playExplosion(at: block.position, in: self)
-                    let blockRef = block
-                    block.playBreakAnimation { [weak self] in
-                        self?.iceBlocks.removeAll { $0 === blockRef }
-                        self?.checkLevelComplete()
-                    }
-                }
+        for block in iceBlocks where !block.isBreaking && block.parent != nil {
+            if let collidedBlock, block === collidedBlock {
+                continue
+            }
+            let distance = hypot(block.position.x - position.x, block.position.y - position.y)
+            if distance >= GamePhysics.explosionRadius || distance <= 0 {
+                continue
+            }
+
+            let damage = max(1, Int(ceil(Double(block.maxDurability) * Double(GamePhysics.explosionDamageRatio))))
+            let destroyed = block.takeDamage(damage)
+            if destroyed {
+                destroyBlock(block, triggerLinkedExplosion: false)
+            } else {
+                AudioManager.shared.playIceHitSound()
             }
         }
     }
 
     private func addScoreForBlock(_ block: IceBlockNode) {
-        var baseScore: Int
-        switch block.blockType {
-        case .normal: baseScore = GameScore.normalIceBlock
-        case .cracked: baseScore = GameScore.crackedIceBlock
-        case .explosive: baseScore = GameScore.explosiveIceBlock
-        }
-
+        var baseScore = Levels.blockScore(for: block.blockType)
         if roundComboCount >= 2 {
             baseScore = Int(Double(baseScore) * GameScore.comboMultiplier)
         }
@@ -953,14 +1171,14 @@ class GameScene: SKScene {
     }
 
     private func updatePenguinCountDisplay() {
-        penguinCountLabel.text = "🐧 × \(penguinsRemaining)"
+        penguinCountLabel.text = "🐧 × \(max(0, penguinsRemaining))"
     }
 
     private func showScorePopup(amount: Int, at position: CGPoint) {
-        let popup = SKLabelNode(text: "+\(amount)")
+        let popup = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        popup.text = "+\(amount)"
         popup.fontSize = 18
         popup.fontColor = .white
-        popup.fontName = "BoldSystem"
         popup.position = CGPoint(x: position.x, y: position.y + 30)
         popup.zPosition = 50
         popup.alpha = 0
@@ -968,181 +1186,250 @@ class GameScene: SKScene {
 
         let rise = SKAction.moveBy(x: 0, y: 40, duration: 0.8)
         rise.timingMode = .easeOut
-        let fadeOut = SKAction.fadeOut(withDuration: 0.8)
-        let remove = SKAction.removeFromParent()
-        popup.run(SKAction.sequence([
-            SKAction.group([SKAction.fadeIn(withDuration: 0.1), rise]),
-            fadeOut,
-            remove
+        popup.run(.sequence([
+            .group([.fadeIn(withDuration: 0.1), rise]),
+            .fadeOut(withDuration: 0.8),
+            .removeFromParent()
         ]))
     }
 
     private func showComboEffect(count: Int, at position: CGPoint) {
-        let comboLabel = SKLabelNode(text: "Combo ×\(count)!")
+        let comboLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        comboLabel.text = "Combo ×\(count)!"
         comboLabel.fontSize = 24
-        comboLabel.fontName = "BoldSystem"
-        comboLabel.position = CGPoint(x: frame.width / 2, y: frame.height / 2 + 50)
+        comboLabel.position = CGPoint(x: frame.midX, y: frame.midY + 50)
         comboLabel.zPosition = 60
         comboLabel.alpha = 0
+        comboLabel.fontColor = count >= 4
+            ? UIColor(red: 0.85, green: 0.42, blue: 1, alpha: 1)
+            : count >= 3
+            ? UIColor(red: 0.36, green: 0.64, blue: 1, alpha: 1)
+            : UIColor(red: 0.34, green: 0.86, blue: 0.42, alpha: 1)
         addChild(comboLabel)
 
-        if count >= 4 {
-            comboLabel.fontColor = UIColor(red: 0.8, green: 0.3, blue: 1.0, alpha: 1.0)
-        } else if count >= 3 {
-            comboLabel.fontColor = UIColor(red: 0.3, green: 0.6, blue: 1.0, alpha: 1.0)
-        } else {
-            comboLabel.fontColor = UIColor(red: 0.3, green: 0.8, blue: 0.3, alpha: 1.0)
-        }
-
         comboLabel.setScale(0.5)
-        let popIn = SKAction.sequence([
-            SKAction.scale(to: 1.2, duration: 0.15),
-            SKAction.scale(to: 1.0, duration: 0.1)
-        ])
-        let fadeIn = SKAction.fadeIn(withDuration: 0.1)
-        let fadeOut = SKAction.fadeOut(withDuration: 0.5)
-        let remove = SKAction.removeFromParent()
-
-        comboLabel.run(SKAction.sequence([
-            SKAction.group([popIn, fadeIn]),
-            SKAction.wait(forDuration: 0.5),
-            fadeOut,
-            remove
+        comboLabel.run(.sequence([
+            .group([
+                .fadeIn(withDuration: 0.1),
+                .sequence([
+                    .scale(to: 1.2, duration: 0.15),
+                    .scale(to: 1.0, duration: 0.1)
+                ])
+            ]),
+            .wait(forDuration: 0.45),
+            .fadeOut(withDuration: 0.45),
+            .removeFromParent()
         ]))
     }
 
     // MARK: - 回合结束
 
     private func onPenguinStopped() {
-        // 清理飞行轨迹粒子
         trailEmitter?.removeFromParent()
         trailEmitter = nil
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            self.checkLevelComplete()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            self?.checkLevelComplete()
         }
     }
 
     // MARK: - 关卡判定
 
     private func checkLevelComplete() {
+        guard !hasPresentedResult else { return }
+
         let activeBlocks = iceBlocks.filter { !$0.isBreaking && $0.parent != nil }
         if activeBlocks.isEmpty {
             showResult(success: true)
-        } else if penguinsRemaining <= 0 {
+        } else if penguinsRemaining <= 0, activePenguin == nil {
             showResult(success: false)
-        } else {
+        } else if activePenguin == nil {
             reloadSlingshot()
         }
     }
 
     private func showResult(success: Bool) {
-        // 播放结果音效
+        guard !hasPresentedResult else { return }
+        hasPresentedResult = true
+
+        freezeGameplay()
+
+        let bonusSummary = success ? applyVictoryBonuses() : VictoryBonusSummary(remainingPenguinBonus: 0, clearBonus: 0)
+        let stars = success ? calculateStars() : 0
+        let previousBest = SaveManager.shared.record(for: currentLevel)?.score ?? 0
+
         if success {
             AudioManager.shared.playGameWinSound()
+            SaveManager.shared.updateScore(level: currentLevel, score: score, stars: stars)
+            SaveManager.shared.unlockLevel(min(currentLevel + 1, Levels.totalLevels))
         } else {
             AudioManager.shared.playGameFailSound()
-        }
-
-        // 保存分数和解锁关卡
-        let stars = calculateStars()
-        if success {
-            SaveManager.shared.updateScore(level: currentLevel, score: score, stars: stars)
-            SaveManager.shared.unlockLevel(currentLevel + 1)
-        } else {
             SaveManager.shared.updateScore(level: currentLevel, score: score, stars: 0)
         }
 
-        resultOverlay = SKNode()
-        resultOverlay?.zPosition = 100
-        resultOverlay?.position = CGPoint(x: frame.width / 2, y: frame.height / 2)
-        addChild(resultOverlay!)
+        bestScoreLabel.text = "最佳: \(max(previousBest, score))"
 
-        let overlayBg = SKShapeNode(rectOf: CGSize(width: frame.width, height: frame.height))
-        overlayBg.fillColor = UIColor(white: 0, alpha: 0.5)
-        overlayBg.strokeColor = .clear
-        overlayBg.position = CGPoint(x: -frame.width / 2, y: -frame.height / 2)
-        resultOverlay?.addChild(overlayBg)
+        let overlay = SKNode()
+        overlay.zPosition = 100
+        overlay.position = CGPoint(x: frame.midX, y: frame.midY)
+        resultOverlay = overlay
+        addChild(overlay)
 
-        let titleLabel = SKLabelNode(text: success ? "🎉 通关！" : "💔 失败")
-        titleLabel.fontSize = 48
-        titleLabel.fontColor = success ? .green : .red
-        titleLabel.fontName = "BoldSystem"
-        titleLabel.position = CGPoint(x: 0, y: 80)
+        let dim = SKSpriteNode(color: UIColor(white: 0, alpha: 0.55), size: frame.size)
+        dim.position = .zero
+        dim.zPosition = -1
+        overlay.addChild(dim)
+
+        let panel = SKShapeNode(rectOf: CGSize(width: min(frame.width * 0.82, 340), height: 310), cornerRadius: 24)
+        panel.fillColor = UIColor(white: 1, alpha: 0.13)
+        panel.strokeColor = UIColor(white: 1, alpha: 0.24)
+        panel.lineWidth = 2
+        panel.position = .zero
+        overlay.addChild(panel)
+
+        let titleLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        titleLabel.text = success ? "通关成功" : "挑战失败"
+        titleLabel.fontSize = 32
+        titleLabel.fontColor = .white
+        titleLabel.position = CGPoint(x: 0, y: 108)
         titleLabel.alpha = 0
-        resultOverlay?.addChild(titleLabel)
+        panel.addChild(titleLabel)
 
-        let scoreText = "本关得分: \(score)"
-        let scoreResultLabel = SKLabelNode(text: scoreText)
-        scoreResultLabel.fontSize = 22
-        scoreResultLabel.fontColor = .white
-        scoreResultLabel.position = CGPoint(x: 0, y: 20)
-        scoreResultLabel.alpha = 0
-        resultOverlay?.addChild(scoreResultLabel)
+        let resultScoreLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        resultScoreLabel.text = "总分 \(score)"
+        resultScoreLabel.fontSize = 28
+        resultScoreLabel.fontColor = palette.accent
+        resultScoreLabel.position = CGPoint(x: 0, y: 60)
+        resultScoreLabel.alpha = 0
+        panel.addChild(resultScoreLabel)
 
-        let starsLabel = SKLabelNode(text: String(repeating: "⭐", count: stars))
-        starsLabel.fontSize = 36
-        starsLabel.position = CGPoint(x: 0, y: -20)
-        starsLabel.alpha = 0
-        resultOverlay?.addChild(starsLabel)
+        let targetSummary = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
+        targetSummary.text = "目标 \(scorePlan.targetScore) · 用时 \(shotsFired) 发"
+        targetSummary.fontSize = 15
+        targetSummary.fontColor = UIColor(white: 0.92, alpha: 1)
+        targetSummary.position = CGPoint(x: 0, y: 26)
+        targetSummary.alpha = 0
+        panel.addChild(targetSummary)
 
-        let btnLabel = success ? "下一关 →" : "重试"
-        let actionBtn = SKShapeNode(rectOf: CGSize(width: 160, height: 48), cornerRadius: 10)
-        actionBtn.fillColor = success ? UIColor(red: 0.3, green: 0.7, blue: 0.3, alpha: 1.0) : UIColor(red: 0.7, green: 0.3, blue: 0.3, alpha: 1.0)
-        actionBtn.strokeColor = .white
-        actionBtn.lineWidth = 2
-        actionBtn.position = CGPoint(x: 0, y: -90)
-        actionBtn.name = success ? "nextButton" : "retryButton"
-        actionBtn.alpha = 0
-        resultOverlay?.addChild(actionBtn)
+        if success {
+            let bonusLine1 = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
+            bonusLine1.text = "剩余企鹅奖励 +\(bonusSummary.remainingPenguinBonus)"
+            bonusLine1.fontSize = 15
+            bonusLine1.fontColor = UIColor(white: 0.96, alpha: 1)
+            bonusLine1.position = CGPoint(x: 0, y: -10)
+            bonusLine1.alpha = 0
+            panel.addChild(bonusLine1)
 
-        let btnText = SKLabelNode(text: btnLabel)
-        btnText.fontSize = 18
-        btnText.fontColor = .white
-        btnText.fontName = "BoldSystem"
-        btnText.position = CGPoint(x: 0, y: -4)
-        actionBtn.addChild(btnText)
+            let bonusLine2 = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
+            bonusLine2.text = "通关奖励 +\(bonusSummary.clearBonus)"
+            bonusLine2.fontSize = 15
+            bonusLine2.fontColor = UIColor(white: 0.96, alpha: 1)
+            bonusLine2.position = CGPoint(x: 0, y: -34)
+            bonusLine2.alpha = 0
+            panel.addChild(bonusLine2)
 
-        if success && currentLevel < Levels.totalLevels {
-            let backBtn = SKShapeNode(rectOf: CGSize(width: 120, height: 40), cornerRadius: 8)
-            backBtn.fillColor = UIColor(white: 0.4, alpha: 0.8)
-            backBtn.strokeColor = .white
-            backBtn.lineWidth = 1
-            backBtn.position = CGPoint(x: 0, y: -150)
-            backBtn.name = "resultBackButton"
-            backBtn.alpha = 0
-            resultOverlay?.addChild(backBtn)
-
-            let backBtnText = SKLabelNode(text: "← 返回选关")
-            backBtnText.fontSize = 14
-            backBtnText.fontColor = .white
-            backBtnText.position = CGPoint(x: 0, y: -3)
-            backBtn.addChild(backBtnText)
+            bonusLine1.run(.sequence([.wait(forDuration: 0.42), .fadeIn(withDuration: 0.24)]))
+            bonusLine2.run(.sequence([.wait(forDuration: 0.52), .fadeIn(withDuration: 0.24)]))
+        } else {
+            let tipLabel = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
+            tipLabel.text = "试试压低角度，优先打掉底层支点。"
+            tipLabel.fontSize = 15
+            tipLabel.fontColor = UIColor(white: 0.96, alpha: 1)
+            tipLabel.position = CGPoint(x: 0, y: -22)
+            tipLabel.alpha = 0
+            panel.addChild(tipLabel)
+            tipLabel.run(.sequence([.wait(forDuration: 0.42), .fadeIn(withDuration: 0.24)]))
         }
 
-        let fadeIn = SKAction.fadeIn(withDuration: 0.3)
-        titleLabel.run(SKAction.sequence([SKAction.wait(forDuration: 0.2), fadeIn]))
-        scoreResultLabel.run(SKAction.sequence([SKAction.wait(forDuration: 0.4), fadeIn]))
-        starsLabel.run(SKAction.sequence([SKAction.wait(forDuration: 0.6), fadeIn]))
-        // 通关时播放星星爆发特效
+        let starsLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        starsLabel.text = success ? String(repeating: "★", count: max(stars, 1)) : "未通关"
+        starsLabel.fontSize = 28
+        starsLabel.fontColor = success && stars > 0 ? UIColor(red: 1, green: 0.88, blue: 0.36, alpha: 1) : UIColor(white: 0.78, alpha: 1)
+        starsLabel.position = CGPoint(x: 0, y: -68)
+        starsLabel.alpha = 0
+        panel.addChild(starsLabel)
+
+        let primaryButtonTitle: String
+        let primaryButtonName: String
+        if success {
+            primaryButtonTitle = currentLevel < Levels.totalLevels ? "下一关" : "完成冒险"
+            primaryButtonName = "nextButton"
+        } else {
+            primaryButtonTitle = "重新挑战"
+            primaryButtonName = "retryButton"
+        }
+
+        let primaryButton = makeOverlayButton(
+            name: primaryButtonName,
+            title: primaryButtonTitle,
+            color: success ? UIColor(red: 0.26, green: 0.72, blue: 0.44, alpha: 1) : UIColor(red: 0.79, green: 0.36, blue: 0.34, alpha: 1),
+            position: CGPoint(x: 0, y: -118)
+        )
+        primaryButton.alpha = 0
+        panel.addChild(primaryButton)
+
+        let backButton = makeOverlayButton(
+            name: "resultBackButton",
+            title: "返回选关",
+            color: UIColor(white: 0.34, alpha: 0.92),
+            position: CGPoint(x: 0, y: -166)
+        )
+        backButton.alpha = 0
+        panel.addChild(backButton)
+
+        let fadeIn = SKAction.fadeIn(withDuration: 0.25)
+        titleLabel.run(.sequence([.wait(forDuration: 0.16), fadeIn]))
+        resultScoreLabel.run(.sequence([.wait(forDuration: 0.28), fadeIn]))
+        targetSummary.run(.sequence([.wait(forDuration: 0.36), fadeIn]))
+        starsLabel.run(.sequence([.wait(forDuration: 0.62), fadeIn]))
+        primaryButton.run(.sequence([.wait(forDuration: 0.78), fadeIn]))
+        backButton.run(.sequence([.wait(forDuration: 0.88), fadeIn]))
+
         if success {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { [weak self] in
-                guard let self = self else { return }
-                ParticleEffects.shared.playStarBurst(at: CGPoint(x: self.frame.width / 2, y: self.frame.height / 2), in: self)
+                guard let self else { return }
+                ParticleEffects.shared.playStarBurst(at: CGPoint(x: self.frame.midX, y: self.frame.midY + 12), in: self)
             }
         }
-        actionBtn.run(SKAction.sequence([SKAction.wait(forDuration: 0.8), fadeIn]))
-        if success && currentLevel < Levels.totalLevels {
-            resultOverlay?.childNode(withName: "resultBackButton")?.run(SKAction.sequence([SKAction.wait(forDuration: 0.9), fadeIn]))
-        }
+    }
 
-        isUserInteractionEnabled = true
+    private func freezeGameplay() {
+        trajectoryLine.isHidden = true
+        trailEmitter?.removeFromParent()
+        trailEmitter = nil
+        activePenguin?.physicsBody = nil
+        activePenguin = nil
+        penguinNode?.removeAllActions()
+        flightState = .stopped
+    }
+
+    private func applyVictoryBonuses() -> VictoryBonusSummary {
+        let summary = VictoryBonusSummary(
+            remainingPenguinBonus: max(0, penguinsRemaining) * GameScore.remainingPenguinBonus,
+            clearBonus: Levels.levelClearBonus(for: currentLevel)
+        )
+        score += summary.total
+        updateScoreDisplay()
+        return summary
+    }
+
+    private func makeOverlayButton(name: String, title: String, color: UIColor, position: CGPoint) -> SKShapeNode {
+        let button = makeButtonNode(width: 180, height: 40, name: name, color: color)
+        button.position = position
+
+        let label = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        label.text = title
+        label.fontSize = 16
+        label.fontColor = .white
+        label.verticalAlignmentMode = .center
+        button.addChild(label)
+        return button
     }
 
     private func calculateStars() -> Int {
-        if score >= levelConfig.threeStarScore { return 3 }
-        if score >= levelConfig.twoStarScore { return 2 }
-        if score >= levelConfig.oneStarScore { return 1 }
+        if score >= scorePlan.threeStarScore { return 3 }
+        if score >= scorePlan.twoStarScore { return 2 }
+        if score >= scorePlan.oneStarScore { return 1 }
         return 0
     }
 
@@ -1152,32 +1439,49 @@ class GameScene: SKScene {
             dismiss(animated: true)
             return
         }
-        let scene = GameScene(level: nextLevel)
-        scene.scaleMode = .resizeFill
-        scene.size = self.size
-        view?.presentScene(scene, transition: .fade(withDuration: 0.3))
+
+        let nextScene = GameScene(level: nextLevel)
+        nextScene.scaleMode = .resizeFill
+        nextScene.size = size
+        view?.presentScene(nextScene, transition: .fade(withDuration: 0.3))
     }
 
     private func retryLevel() {
         let scene = GameScene(level: currentLevel)
         scene.scaleMode = .resizeFill
-        scene.size = self.size
+        scene.size = size
         view?.presentScene(scene, transition: .fade(withDuration: 0.3))
     }
 
     private func dismiss(animated: Bool) {
-        view?.window?.rootViewController?.dismiss(animated: animated)
+        guard let viewController = owningViewController() else {
+            view?.window?.rootViewController?.dismiss(animated: animated)
+            return
+        }
+        viewController.dismiss(animated: animated)
+    }
+
+    private func owningViewController() -> UIViewController? {
+        var responder: UIResponder? = view
+        while let current = responder {
+            if let viewController = current as? UIViewController {
+                return viewController
+            }
+            responder = current.next
+        }
+        return nil
     }
 
     // MARK: - Pause / Resume
+
     @objc private func appDidBecomeActive() {
         isPaused = false
-        physicsWorld.speed = 1.0
+        physicsWorld.speed = 1
     }
 
     @objc private func appWillResignActive() {
         isPaused = true
-        physicsWorld.speed = 0.0
+        physicsWorld.speed = 0
     }
 
     private func setupPauseNotifications() {

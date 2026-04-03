@@ -1,120 +1,146 @@
 import Foundation
 import UIKit
-import SnapKit
+import ObjectiveC
 
 // MARK: - 排行榜管理器
 
-class LeaderboardManager {
+final class LeaderboardManager: NSObject {
     static let shared = LeaderboardManager()
 
-    private init() {}
+    private enum AssociatedKeys {
+        static var closeAction: UInt8 = 0
+        static var tableController: UInt8 = 0
+    }
+
+    private override init() {}
 
     // MARK: - 排行榜UI
 
     /// 创建排行榜面板
     func createLeaderboardPanel(onClose: @escaping () -> Void) -> UIView {
         let container = UIView()
+        container.translatesAutoresizingMaskIntoConstraints = false
         container.backgroundColor = UIColor.black.withAlphaComponent(0.5)
 
         let panel = UIView()
+        panel.translatesAutoresizingMaskIntoConstraints = false
         panel.backgroundColor = .white
-        panel.layer.cornerRadius = 16
+        panel.layer.cornerRadius = 20
         panel.tag = 1001
 
         let titleLabel = UILabel()
-        titleLabel.text = "🏆 积分排行榜"
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        titleLabel.text = "积分排行榜"
         titleLabel.font = .systemFont(ofSize: 22, weight: .bold)
         titleLabel.textAlignment = .center
-        titleLabel.textColor = UIColor(red: 0.9, green: 0.7, blue: 0.0, alpha: 1.0)
+        titleLabel.textColor = UIColor(red: 0.93, green: 0.71, blue: 0.05, alpha: 1.0)
+
+        let subtitleLabel = UILabel()
+        subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
+        subtitleLabel.text = "记录每一关打出的最佳成绩"
+        subtitleLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        subtitleLabel.textColor = .gray
+        subtitleLabel.textAlignment = .center
 
         let tableView = UITableView(frame: .zero, style: .plain)
+        tableView.translatesAutoresizingMaskIntoConstraints = false
         tableView.tag = 1002
-        tableView.delegate = LeaderboardTableDelegate()
-        tableView.dataSource = LeaderboardTableDelegate()
-        tableView.register(LeaderboardCell.self, forCellReuseIdentifier: "LeaderboardCell")
         tableView.separatorStyle = .singleLine
         tableView.backgroundColor = .white
-        tableView.layer.cornerRadius = 8
+        tableView.layer.cornerRadius = 10
         tableView.isScrollEnabled = true
+        tableView.register(LeaderboardCell.self, forCellReuseIdentifier: "LeaderboardCell")
 
-        // 注入数据
-        let topScores = SaveManager.shared.topScores(limit: 10)
-        if let delegate = tableView.delegate as? LeaderboardTableDelegate {
-            delegate.scores = topScores
-        }
-        if let source = tableView.dataSource as? LeaderboardTableDelegate {
-            source.scores = topScores
-        }
+        let tableController = LeaderboardTableController(scores: SaveManager.shared.topScores(limit: 10))
+        tableView.delegate = tableController
+        tableView.dataSource = tableController
+        objc_setAssociatedObject(tableView, &AssociatedKeys.tableController, tableController, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
 
         let closeButton = UIButton(type: .system)
+        closeButton.translatesAutoresizingMaskIntoConstraints = false
         closeButton.setTitle("关闭", for: .normal)
-        closeButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .medium)
+        closeButton.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
         closeButton.setTitleColor(.white, for: .normal)
-        closeButton.backgroundColor = UIColor(white: 0.5, alpha: 1.0)
-        closeButton.layer.cornerRadius = 8
-        closeButton.addTarget(nil, action: #selector(closeTapped(_:)), for: .touchUpInside)
-        objc_setAssociatedObject(closeButton, "closeAction", onClose, .OBJC_ASSOCIATION_RETAIN)
-        objc_setAssociatedObject(container, "closeAction", onClose, .OBJC_ASSOCIATION_RETAIN)
+        closeButton.backgroundColor = UIColor(white: 0.45, alpha: 1.0)
+        closeButton.layer.cornerRadius = 10
+        closeButton.addTarget(self, action: #selector(closeTapped(_:)), for: .touchUpInside)
+
+        objc_setAssociatedObject(closeButton, &AssociatedKeys.closeAction, onClose, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        objc_setAssociatedObject(container, &AssociatedKeys.closeAction, onClose, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
 
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(backgroundTapped(_:)))
+        tapGesture.cancelsTouchesInView = false
         container.addGestureRecognizer(tapGesture)
 
         container.addSubview(panel)
         panel.addSubview(titleLabel)
+        panel.addSubview(subtitleLabel)
         panel.addSubview(tableView)
         panel.addSubview(closeButton)
 
-        panel.snp.makeConstraints { make in
-            make.center.equalToSuperview()
-            make.width.equalTo(340)
-            make.height.equalTo(420)
-        }
+        let preferredWidth = panel.widthAnchor.constraint(equalToConstant: 340)
+        preferredWidth.priority = .defaultHigh
 
-        titleLabel.snp.makeConstraints { make in
-            make.top.equalToSuperview().offset(16)
-            make.left.right.equalToSuperview().inset(16)
-        }
+        NSLayoutConstraint.activate([
+            panel.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            panel.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            panel.leadingAnchor.constraint(greaterThanOrEqualTo: container.leadingAnchor, constant: 16),
+            panel.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -16),
+            panel.widthAnchor.constraint(lessThanOrEqualTo: container.widthAnchor, constant: -32),
+            preferredWidth,
+            panel.heightAnchor.constraint(equalToConstant: 430),
 
-        tableView.snp.makeConstraints { make in
-            make.top.equalTo(titleLabel.snp.bottom).offset(16)
-            make.left.right.equalToSuperview().inset(16)
-            make.bottom.equalTo(closeButton.snp.top).offset(-16)
-        }
+            titleLabel.topAnchor.constraint(equalTo: panel.topAnchor, constant: 20),
+            titleLabel.leadingAnchor.constraint(equalTo: panel.leadingAnchor, constant: 16),
+            titleLabel.trailingAnchor.constraint(equalTo: panel.trailingAnchor, constant: -16),
 
-        closeButton.snp.makeConstraints { make in
-            make.bottom.equalToSuperview().offset(-16)
-            make.centerX.equalToSuperview()
-            make.width.equalTo(100)
-            make.height.equalTo(36)
-        }
+            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 6),
+            subtitleLabel.leadingAnchor.constraint(equalTo: panel.leadingAnchor, constant: 16),
+            subtitleLabel.trailingAnchor.constraint(equalTo: panel.trailingAnchor, constant: -16),
+
+            tableView.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 16),
+            tableView.leadingAnchor.constraint(equalTo: panel.leadingAnchor, constant: 16),
+            tableView.trailingAnchor.constraint(equalTo: panel.trailingAnchor, constant: -16),
+            tableView.bottomAnchor.constraint(equalTo: closeButton.topAnchor, constant: -16),
+
+            closeButton.bottomAnchor.constraint(equalTo: panel.bottomAnchor, constant: -16),
+            closeButton.centerXAnchor.constraint(equalTo: panel.centerXAnchor),
+            closeButton.widthAnchor.constraint(equalToConstant: 110),
+            closeButton.heightAnchor.constraint(equalToConstant: 40)
+        ])
 
         return container
     }
 
     @objc private func closeTapped(_ sender: UIButton) {
-        if let action = objc_getAssociatedObject(sender, "closeAction") as? () -> Void {
+        if let action = objc_getAssociatedObject(sender, &AssociatedKeys.closeAction) as? () -> Void {
             action()
         }
     }
 
     @objc private func backgroundTapped(_ gesture: UITapGestureRecognizer) {
         let location = gesture.location(in: gesture.view)
-        if let panel = gesture.view?.viewWithTag(1001), !panel.frame.contains(location) {
-            if let closeAction = objc_getAssociatedObject(gesture.view!, "closeAction") as? () -> Void {
-                closeAction()
-            }
+        if let panel = gesture.view?.viewWithTag(1001),
+           !panel.frame.contains(location),
+           let container = gesture.view,
+           let closeAction = objc_getAssociatedObject(container, &AssociatedKeys.closeAction) as? () -> Void {
+            closeAction()
         }
     }
 }
 
 // MARK: - 排行榜Table数据源/代理
 
-private class LeaderboardTableDelegate: NSObject, UITableViewDataSource, UITableViewDelegate {
+private final class LeaderboardTableController: NSObject, UITableViewDataSource, UITableViewDelegate {
 
-    var scores: [ScoreRecord] = []
+    let scores: [ScoreRecord]
+
+    init(scores: [ScoreRecord]) {
+        self.scores = scores
+    }
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return max(scores.count, 1)  // 至少显示一行（空状态）
+        max(scores.count, 1)
     }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -131,13 +157,13 @@ private class LeaderboardTableDelegate: NSObject, UITableViewDataSource, UITable
     }
 
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
-        return 52
+        56
     }
 }
 
 // MARK: - 排行榜单元格
 
-class LeaderboardCell: UITableViewCell {
+final class LeaderboardCell: UITableViewCell {
 
     private let rankLabel = UILabel()
     private let levelLabel = UILabel()
@@ -157,18 +183,22 @@ class LeaderboardCell: UITableViewCell {
     private func setupUI() {
         selectionStyle = .none
 
+        rankLabel.translatesAutoresizingMaskIntoConstraints = false
         rankLabel.font = .systemFont(ofSize: 18, weight: .bold)
         rankLabel.textAlignment = .center
-        rankLabel.frame = CGRect(x: 0, y: 0, width: 40, height: 52)
 
+        levelLabel.translatesAutoresizingMaskIntoConstraints = false
         levelLabel.font = .systemFont(ofSize: 14, weight: .medium)
         levelLabel.textColor = .darkGray
 
+        scoreLabel.translatesAutoresizingMaskIntoConstraints = false
         scoreLabel.font = .systemFont(ofSize: 16, weight: .bold)
         scoreLabel.textColor = UIColor(red: 0.2, green: 0.4, blue: 0.8, alpha: 1.0)
 
+        starsLabel.translatesAutoresizingMaskIntoConstraints = false
         starsLabel.font = .systemFont(ofSize: 14)
 
+        dateLabel.translatesAutoresizingMaskIntoConstraints = false
         dateLabel.font = .systemFont(ofSize: 11)
         dateLabel.textColor = .gray
 
@@ -178,31 +208,23 @@ class LeaderboardCell: UITableViewCell {
         contentView.addSubview(starsLabel)
         contentView.addSubview(dateLabel)
 
-        rankLabel.snp.makeConstraints { make in
-            make.left.equalToSuperview().offset(8)
-            make.centerY.equalToSuperview()
-            make.width.equalTo(36)
-        }
+        NSLayoutConstraint.activate([
+            rankLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 8),
+            rankLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            rankLabel.widthAnchor.constraint(equalToConstant: 36),
 
-        levelLabel.snp.makeConstraints { make in
-            make.left.equalTo(rankLabel.snp.right).offset(8)
-            make.top.equalToSuperview().offset(8)
-        }
+            levelLabel.leadingAnchor.constraint(equalTo: rankLabel.trailingAnchor, constant: 8),
+            levelLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 9),
 
-        starsLabel.snp.makeConstraints { make in
-            make.left.equalTo(rankLabel.snp.right).offset(8)
-            make.bottom.equalToSuperview().offset(-8)
-        }
+            starsLabel.leadingAnchor.constraint(equalTo: rankLabel.trailingAnchor, constant: 8),
+            starsLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -9),
 
-        scoreLabel.snp.makeConstraints { make in
-            make.right.equalToSuperview().offset(-16)
-            make.top.equalToSuperview().offset(8)
-        }
+            scoreLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            scoreLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 9),
 
-        dateLabel.snp.makeConstraints { make in
-            make.right.equalToSuperview().offset(-16)
-            make.bottom.equalToSuperview().offset(-8)
-        }
+            dateLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            dateLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -9)
+        ])
     }
 
     func configure(rank: Int, record: ScoreRecord) {
@@ -215,7 +237,7 @@ class LeaderboardCell: UITableViewCell {
 
         levelLabel.text = "第 \(record.level) 关"
         scoreLabel.text = "\(record.score) 分"
-        starsLabel.text = String(repeating: "⭐", count: record.stars)
+        starsLabel.text = record.stars > 0 ? String(repeating: "⭐", count: record.stars) : "未通关"
 
         let formatter = DateFormatter()
         formatter.dateFormat = "MM/dd"

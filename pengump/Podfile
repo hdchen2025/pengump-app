@@ -3,8 +3,8 @@ use_frameworks!
 inhibit_all_warnings!
 
 target 'pengump' do
-  # UI布局
-  pod 'SnapKit', '~> 5.6'
+  # 当前版本不依赖 CocoaPods，可直接打开 xcodeproj。
+  # 如后续接入第三方服务，再在这里恢复依赖。
 
   # 登录/后端（预留，暂不需要）
   # pod 'Firebase/Auth', '~> 10.0'

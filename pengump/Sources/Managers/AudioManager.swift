@@ -25,16 +25,14 @@ enum BackgroundMusic: String {
 
 // MARK: - AudioManager
 
-class AudioManager {
+final class AudioManager {
     static let shared = AudioManager()
 
-    // MARK: - Properties
-
-    private var sfxPlayers: [String: AVAudioPlayer] = [:]
+    private var activeSFXPlayers: [URL: AVAudioPlayer] = [:]
     private var musicPlayer: AVAudioPlayer?
     private var currentMusic: BackgroundMusic?
+    private var musicFileURL: URL?
 
-    // UserDefaults keys for settings
     private enum Keys {
         static let musicEnabled = "audio_music_enabled"
         static let sfxEnabled = "audio_sfx_enabled"
@@ -72,11 +70,8 @@ class AudioManager {
         set { UserDefaults.standard.set(newValue, forKey: Keys.sfxVolume) }
     }
 
-    // MARK: - Init
-
     private init() {
         setupAudioSession()
-        preloadAllSFX()
     }
 
     private func setupAudioSession() {
@@ -88,29 +83,12 @@ class AudioManager {
         }
     }
 
-    // MARK: - 音效预加载（合成音）
-
-    private func preloadAllSFX() {
-        // 使用系统合成音效代替实际音频文件
-        // 预加载所有音效的audioPlayer（用于获取时长信息）
-        for effect in SoundEffect.allCases {
-            sfxPlayers[effect.rawValue] = nil // 占位，后续按需生成
-        }
-    }
-
-    // MARK: - 播放音效
-
     func play(_ effect: SoundEffect) {
         guard isSFXEnabled else { return }
-
-        // 使用系统合成音效
         playSystemSound(for: effect)
     }
 
     private func playSystemSound(for effect: SoundEffect) {
-        // 根据不同音效类型播放对应的系统合成音效
-        // 利用 AudioServicesCreateSystemSoundID 和短促的合成音
-
         switch effect {
         case .slingshotLaunch:
             playTone(frequency: 880, duration: 0.08, volume: sfxVolume)
@@ -135,9 +113,6 @@ class AudioManager {
         }
     }
 
-    // MARK: - 音频合成方法
-
-    /// 播放指定频率的纯音
     private func playTone(frequency: Float, duration: Float, volume: Float) {
         let sampleRate: Float = 44100
         let frameCount = Int(sampleRate * duration)
@@ -145,24 +120,24 @@ class AudioManager {
         var audioData = [Float](repeating: 0, count: frameCount)
         for i in 0..<frameCount {
             let time = Float(i) / sampleRate
-            let envelope = min(1.0, min(time * 50, (duration - time) * 50)) // ADSR简化版
+            let envelope = min(1.0, min(time * 50, (duration - time) * 50))
             audioData[i] = sin(2.0 * .pi * frequency * time) * envelope * volume
         }
 
         playGeneratedAudio(audioData, sampleRate: sampleRate)
     }
 
-    /// 播放粉红噪声（用于爆炸/破碎声）
     private func playNoise(duration: Float, volume: Float) {
         let sampleRate: Float = 44100
         let frameCount = Int(sampleRate * duration)
 
         var audioData = [Float](repeating: 0, count: frameCount)
-        var b0: Float = 0, b1: Float = 0, b2: Float = 0
+        var b0: Float = 0
+        var b1: Float = 0
+        var b2: Float = 0
 
         for i in 0..<frameCount {
             let white = Float.random(in: -1...1)
-            // 简单的低通滤波产生粉红噪声
             b0 = 0.99886 * b0 + white * 0.0555179
             b1 = 0.99332 * b1 + white * 0.0750759
             b2 = 0.96900 * b2 + white * 0.1538520
@@ -174,14 +149,14 @@ class AudioManager {
         playGeneratedAudio(audioData, sampleRate: sampleRate)
     }
 
-    /// 播放风声（企鹅飞行）
     private func playWindSound(volume: Float) {
         let sampleRate: Float = 44100
         let duration: Float = 0.3
         let frameCount = Int(sampleRate * duration)
 
         var audioData = [Float](repeating: 0, count: frameCount)
-        var b0: Float = 0, b1: Float = 0
+        var b0: Float = 0
+        var b1: Float = 0
 
         for i in 0..<frameCount {
             let white = Float.random(in: -1...1)
@@ -190,14 +165,13 @@ class AudioManager {
             let wind = (b0 + b1) * 0.4
             let time = Float(i) / sampleRate
             let modulation = sin(2.0 * .pi * 3.0 * time) * 0.3 + 0.7
-            let envelope = sin(.pi * time / duration) // 渐入渐出
+            let envelope = sin(.pi * time / duration)
             audioData[i] = wind * modulation * envelope * volume
         }
 
         playGeneratedAudio(audioData, sampleRate: sampleRate)
     }
 
-    /// 播放旋律（游戏胜利/失败音效）
     private func playMelody(notes: [Float], durations: [Float], volume: Float) {
         let sampleRate: Float = 44100
         var audioData = [Float]()
@@ -224,11 +198,27 @@ class AudioManager {
         playGeneratedAudio(audioData, sampleRate: sampleRate)
     }
 
-    /// 将生成的音频数据转换为AudioBuffer并播放
     private func playGeneratedAudio(_ audioData: [Float], sampleRate: Float) {
         guard !audioData.isEmpty else { return }
 
-        // 转换为 16-bit PCM
+        do {
+            let fileURL = try writeWAVFile(audioData: audioData, sampleRate: sampleRate, prefix: "temp_audio")
+            let player = try AVAudioPlayer(contentsOf: fileURL)
+            player.volume = sfxVolume
+            player.prepareToPlay()
+            activeSFXPlayers[fileURL] = player
+            player.play()
+
+            let lifetime = Double(audioData.count) / Double(sampleRate) + 0.5
+            DispatchQueue.main.asyncAfter(deadline: .now() + lifetime) { [weak self] in
+                self?.cleanupSFXFile(fileURL)
+            }
+        } catch {
+            print("AudioManager: Failed to play generated audio: \(error)")
+        }
+    }
+
+    private func createPCMData(from audioData: [Float]) -> Data {
         var pcmData = Data()
         for sample in audioData {
             let clamped = max(-1.0, min(1.0, sample))
@@ -236,48 +226,44 @@ class AudioManager {
             var littleEndian = int16.littleEndian
             pcmData.append(Data(bytes: &littleEndian, count: 2))
         }
-
-        // 创建临时文件
-        let tempDir = FileManager.default.temporaryDirectory
-        let fileName = "temp_audio_\(UUID().uuidString).wav"
-        let fileURL = tempDir.appendingPathComponent(fileName)
-
-        // 写入WAV文件
-        var header = createWAVHeader(dataSize: UInt32(pcmData.count), sampleRate: UInt32(sampleRate), numChannels: 1, bitsPerSample: 16)
-        let headerData = Data(bytes: &header, count: 44)
-
-        do {
-            try headerData.write(to: fileURL)
-            try pcmData.write(to: fileURL, options: .atomic)
-
-            // 使用AVAudioPlayer播放
-            let player = try AVAudioPlayer(contentsOf: fileURL)
-            player.volume = sfxVolume
-            player.play()
-
-            // 播放完成后删除临时文件
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(audioData.count) / Double(sampleRate) + 0.5) {
-                try? FileManager.default.removeItem(at: fileURL)
-            }
-        } catch {
-            print("AudioManager: Failed to play generated audio: \(error)")
-        }
+        return pcmData
     }
 
-    /// 创建WAV文件头
+    private func writeWAVFile(audioData: [Float], sampleRate: Float, prefix: String) throws -> URL {
+        let pcmData = createPCMData(from: audioData)
+        let tempDir = FileManager.default.temporaryDirectory
+        let fileName = "\(prefix)_\(UUID().uuidString).wav"
+        let fileURL = tempDir.appendingPathComponent(fileName)
+
+        var header = createWAVHeader(
+            dataSize: UInt32(pcmData.count),
+            sampleRate: UInt32(sampleRate),
+            numChannels: 1,
+            bitsPerSample: 16
+        )
+        let headerData = Data(bytes: &header, count: 44)
+
+        var outputData = Data()
+        outputData.append(headerData)
+        outputData.append(pcmData)
+        try outputData.write(to: fileURL, options: .atomic)
+
+        return fileURL
+    }
+
     private struct WAVEHeader {
-        var chunkID: UInt32 = 0x52494646  // "RIFF"
+        var chunkID: UInt32 = 0x52494646
         var chunkSize: UInt32 = 0
-        var format: UInt32 = 0x57415645  // "WAVE"
-        var subchunk1ID: UInt32 = 0x666D7420  // "fmt "
+        var format: UInt32 = 0x57415645
+        var subchunk1ID: UInt32 = 0x666D7420
         var subchunk1Size: UInt32 = 16
-        var audioFormat: UInt16 = 1  // PCM
+        var audioFormat: UInt16 = 1
         var numChannels: UInt16 = 1
         var sampleRate: UInt32 = 44100
         var byteRate: UInt32 = 44100 * 2
         var blockAlign: UInt16 = 2
         var bitsPerSample: UInt16 = 16
-        var subchunk2ID: UInt32 = 0x64617461  // "data"
+        var subchunk2ID: UInt32 = 0x64617461
         var subchunk2Size: UInt32 = 0
     }
 
@@ -294,22 +280,17 @@ class AudioManager {
         return header
     }
 
-    // MARK: - 背景音乐
-
     func playMusic(_ music: BackgroundMusic, loop: Bool = true) {
         guard isMusicEnabled else { return }
 
-        // 如果当前正在播放同一首音乐，不重复启动
         if currentMusic == music, musicPlayer?.isPlaying == true {
             return
         }
 
         currentMusic = music
-
-        // 停止当前音乐
         musicPlayer?.stop()
+        cleanupMusicFile()
 
-        // 使用简单合成音作为背景音乐（MIDI风格循环）
         let musicData = generateMusicLoop(for: music)
         if let player = createMusicPlayer(from: musicData, sampleRate: 44100) {
             musicPlayer = player
@@ -325,21 +306,17 @@ class AudioManager {
 
         switch music {
         case .menu:
-            // 欢快的8-bit风格菜单音乐
-            // C大调，循环小节：Bach风格的简单旋律
             let melody: [(Float, Float)] = [
                 (523, 0.2), (659, 0.2), (784, 0.2), (659, 0.2), (523, 0.2), (440, 0.2), (523, 0.4),
                 (523, 0.2), (659, 0.2), (784, 0.2), (880, 0.2), (784, 0.2), (659, 0.2), (523, 0.2), (440, 0.2), (392, 0.4)
             ]
-            let loopCount = 2
-            for _ in 0..<loopCount {
+            for _ in 0..<2 {
                 for (freq, duration) in melody {
                     let frames = Int(sampleRate * duration)
                     for i in 0..<frames {
                         let time = Float(i) / sampleRate
                         let envelope = min(1.0, min(Float(i) * 30, Float(frames - i) * 15))
                         let sample = sin(2.0 * .pi * freq * time) * envelope * 0.3
-                        // 添加一点谐波让声音更丰富
                         let harmonic2 = sin(2.0 * .pi * freq * 2.0 * time) * envelope * 0.05
                         audioData.append(sample + harmonic2)
                     }
@@ -347,13 +324,11 @@ class AudioManager {
             }
 
         case .game:
-            // 游戏背景音乐 - 稍快节奏，轻快活泼
             let melody: [(Float, Float)] = [
                 (392, 0.15), (440, 0.15), (494, 0.15), (523, 0.15), (494, 0.15), (440, 0.15), (392, 0.3),
                 (523, 0.15), (494, 0.15), (440, 0.15), (392, 0.3), (440, 0.15), (494, 0.15), (523, 0.3)
             ]
-            let loopCount = 3
-            for _ in 0..<loopCount {
+            for _ in 0..<3 {
                 for (freq, duration) in melody {
                     let frames = Int(sampleRate * duration)
                     for i in 0..<frames {
@@ -373,28 +348,11 @@ class AudioManager {
     private func createMusicPlayer(from audioData: [Float], sampleRate: Float) -> AVAudioPlayer? {
         guard !audioData.isEmpty else { return nil }
 
-        // 转换为 16-bit PCM
-        var pcmData = Data()
-        for sample in audioData {
-            let clamped = max(-1.0, min(1.0, sample))
-            let int16 = Int16(clamped * Float(Int16.max))
-            var littleEndian = int16.littleEndian
-            pcmData.append(Data(bytes: &littleEndian, count: 2))
-        }
-
-        // 创建临时WAV文件
-        let tempDir = FileManager.default.temporaryDirectory
-        let fileName = "music_\(UUID().uuidString).wav"
-        let fileURL = tempDir.appendingPathComponent(fileName)
-
-        var header = createWAVHeader(dataSize: UInt32(pcmData.count), sampleRate: UInt32(sampleRate), numChannels: 1, bitsPerSample: 16)
-        let headerData = Data(bytes: &header, count: 44)
-
         do {
-            try headerData.write(to: fileURL)
-            try pcmData.write(to: fileURL, options: .atomic)
+            let fileURL = try writeWAVFile(audioData: audioData, sampleRate: sampleRate, prefix: "music")
             let player = try AVAudioPlayer(contentsOf: fileURL)
             player.prepareToPlay()
+            musicFileURL = fileURL
             return player
         } catch {
             print("AudioManager: Failed to create music player: \(error)")
@@ -404,7 +362,9 @@ class AudioManager {
 
     func stopMusic() {
         musicPlayer?.stop()
+        musicPlayer = nil
         currentMusic = nil
+        cleanupMusicFile()
     }
 
     func pauseMusic() {
@@ -415,8 +375,6 @@ class AudioManager {
         guard isMusicEnabled else { return }
         musicPlayer?.play()
     }
-
-    // MARK: - 快捷方法
 
     func toggleMusic() {
         isMusicEnabled.toggle()
@@ -433,7 +391,18 @@ class AudioManager {
         isSFXEnabled.toggle()
     }
 
-    // MARK: - 游戏事件集成
+    private func cleanupSFXFile(_ fileURL: URL) {
+        activeSFXPlayers[fileURL]?.stop()
+        activeSFXPlayers.removeValue(forKey: fileURL)
+        try? FileManager.default.removeItem(at: fileURL)
+    }
+
+    private func cleanupMusicFile() {
+        if let url = musicFileURL {
+            try? FileManager.default.removeItem(at: url)
+            musicFileURL = nil
+        }
+    }
 
     func playLaunchSound() { play(.slingshotLaunch) }
     func playIceHitSound() { play(.iceHit) }

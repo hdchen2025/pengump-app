@@ -164,8 +164,9 @@ class SaveManager {
 
     /// 解锁新关卡
     func unlockLevel(_ level: Int) {
-        if level > unlockedLevels {
-            unlockedLevels = level
+        let cappedLevel = min(level, Levels.totalLevels)
+        if cappedLevel > unlockedLevels {
+            unlockedLevels = cappedLevel
             save()
         }
     }

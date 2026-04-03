@@ -1,5 +1,4 @@
 import UIKit
-import SnapKit
 
 // MARK: - 设置项类型
 
@@ -20,12 +19,11 @@ enum SettingsSection: Int, CaseIterable {
 
 // MARK: - 设置ViewController
 
-class SettingsViewController: UIViewController {
-
-    // MARK: - UI Elements
+final class SettingsViewController: UIViewController {
 
     private lazy var tableView: UITableView = {
         let table = UITableView(frame: .zero, style: .insetGrouped)
+        table.translatesAutoresizingMaskIntoConstraints = false
         table.delegate = self
         table.dataSource = self
         table.register(UITableViewCell.self, forCellReuseIdentifier: "Cell")
@@ -35,26 +33,28 @@ class SettingsViewController: UIViewController {
         return table
     }()
 
-    private lazy var headerView: UIView = {
-        let view = UIView(frame: CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 80))
-        view.backgroundColor = .clear
-
-        let titleLabel = UILabel()
-        titleLabel.text = isEnglish ? "⚙️ Settings" : "⚙️ 设置"
-        titleLabel.font = .systemFont(ofSize: 28, weight: .bold)
-        titleLabel.textColor = UIColor(red: 0.2, green: 0.3, blue: 0.5, alpha: 1.0)
-        titleLabel.textAlignment = .center
-        view.addSubview(titleLabel)
-
-        titleLabel.snp.makeConstraints { make in
-            make.centerX.equalToSuperview()
-            make.bottom.equalToSuperview().offset(-10)
-        }
-
-        return view
+    private lazy var titleLabel: UILabel = {
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.text = isEnglish ? "Settings" : "设置"
+        label.font = .systemFont(ofSize: 30, weight: .bold)
+        label.textColor = UIColor(red: 0.2, green: 0.3, blue: 0.5, alpha: 1.0)
+        label.textAlignment = .center
+        return label
     }()
 
-    // MARK: - Data
+    private lazy var backButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.setTitle(isEnglish ? "Back" : "返回", for: .normal)
+        button.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+        button.setTitleColor(UIColor(red: 0.2, green: 0.5, blue: 0.9, alpha: 1.0), for: .normal)
+        button.backgroundColor = UIColor.white.withAlphaComponent(0.7)
+        button.layer.cornerRadius = 12
+        button.contentEdgeInsets = UIEdgeInsets(top: 8, left: 14, bottom: 8, right: 14)
+        button.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
+        return button
+    }()
 
     private enum SettingsItem {
         case musicSwitch
@@ -70,8 +70,6 @@ class SettingsViewController: UIViewController {
 
     private var sections: [(SettingsSection, [SettingsItem])] = []
 
-    // MARK: - Lifecycle
-
     override func viewDidLoad() {
         super.viewDidLoad()
         setupData()
@@ -81,10 +79,10 @@ class SettingsViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         setupData()
+        titleLabel.text = isEnglish ? "Settings" : "设置"
+        backButton.setTitle(isEnglish ? "Back" : "返回", for: .normal)
         tableView.reloadData()
     }
-
-    // MARK: - Setup
 
     private var isEnglish: Bool {
         UserDefaults.standard.string(forKey: "game_language") == "English"
@@ -92,22 +90,26 @@ class SettingsViewController: UIViewController {
 
     private func setupUI() {
         view.backgroundColor = UIColor(red: 0.9, green: 0.95, blue: 1.0, alpha: 1.0)
-
         view.addSubview(tableView)
-        tableView.tableHeaderView = headerView
-
-        tableView.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
-        }
-
-        // 导航栏返回按钮
-        let backButton = UIButton(type: .system)
-        backButton.setTitle(isEnglish ? "← Back" : "← 返回", for: .normal)
-        backButton.titleLabel?.font = .systemFont(ofSize: 16)
-        backButton.setTitleColor(UIColor(red: 0.2, green: 0.5, blue: 0.9, alpha: 1.0), for: .normal)
-        backButton.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
-        backButton.frame = CGRect(x: 16, y: 50, width: 80, height: 32)
+        view.addSubview(titleLabel)
         view.addSubview(backButton)
+
+        let headerSpacer = UIView(frame: CGRect(x: 0, y: 0, width: 0, height: 76))
+        headerSpacer.backgroundColor = .clear
+        tableView.tableHeaderView = headerSpacer
+
+        NSLayoutConstraint.activate([
+            backButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 10),
+            backButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+
+            titleLabel.centerYAnchor.constraint(equalTo: backButton.centerYAnchor),
+            titleLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+
+            tableView.topAnchor.constraint(equalTo: view.topAnchor),
+            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
     }
 
     private func setupData() {
@@ -132,8 +134,6 @@ class SettingsViewController: UIViewController {
         ]
     }
 
-    // MARK: - Actions
-
     @objc private func backTapped() {
         AudioManager.shared.playButtonTapSound()
         dismiss(animated: true)
@@ -144,15 +144,16 @@ class SettingsViewController: UIViewController {
         let alert = UIAlertController(title: alertTitle, message: nil, preferredStyle: .actionSheet)
 
         let languages = ["简体中文", "English"]
+        let currentLanguage = UserDefaults.standard.string(forKey: "game_language") ?? "简体中文"
         for lang in languages {
-            let action = UIAlertAction(title: lang, style: .default) { [weak self] _ in
+            let actionTitle = lang == currentLanguage ? "\(lang) ✓" : lang
+            let action = UIAlertAction(title: actionTitle, style: .default) { [weak self] _ in
                 UserDefaults.standard.set(lang, forKey: "game_language")
                 self?.setupData()
                 self?.tableView.reloadData()
+                self?.titleLabel.text = self?.isEnglish == true ? "Settings" : "设置"
+                self?.backButton.setTitle(self?.isEnglish == true ? "Back" : "返回", for: .normal)
                 self?.showRestartAlert()
-            }
-            if lang == (UserDefaults.standard.string(forKey: "game_language") ?? "简体中文") {
-                action.setValue(true, forKey: "checked")
             }
             alert.addAction(action)
         }
@@ -170,7 +171,7 @@ class SettingsViewController: UIViewController {
     private func showRestartAlert() {
         let alert = UIAlertController(
             title: isEnglish ? "Language Changed" : "语言已更改",
-            message: isEnglish ? "Some changes will take effect after restarting the app." : "部分语言更改将在重启应用后生效。",
+            message: isEnglish ? "Some text will refresh after you reopen the app." : "部分文案会在重新打开应用后完全刷新。",
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: isEnglish ? "OK" : "确定", style: .default))
@@ -185,28 +186,28 @@ class SettingsViewController: UIViewController {
     }
 
     private func openRatePage() {
-        // 打开App Store评分页
-        if let url = URL(string: "https://apps.apple.com/app/idXXXXXXXXXX?action=write-review") {
-            UIApplication.shared.open(url)
-        }
+        let alert = UIAlertController(
+            title: isEnglish ? "Coming Soon" : "暂未开放",
+            message: isEnglish ? "The App Store page is not open yet. We will enable rating after release." : "App Store 页面尚未开放，正式上架后再开启评分入口。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: isEnglish ? "OK" : "确定", style: .default))
+        present(alert, animated: true)
     }
-
 }
-
-// MARK: - UITableViewDataSource
 
 extension SettingsViewController: UITableViewDataSource {
 
     func numberOfSections(in tableView: UITableView) -> Int {
-        return sections.count
+        sections.count
     }
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return sections[section].1.count
+        sections[section].1.count
     }
 
     func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        return sections[section].0.title
+        sections[section].0.title
     }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -216,7 +217,7 @@ extension SettingsViewController: UITableViewDataSource {
         switch item {
         case .musicSwitch:
             let cell = tableView.dequeueReusableCell(withIdentifier: "SwitchCell", for: indexPath) as! SwitchTableViewCell
-            let title = isEnglish ? "🎵 Background Music" : "🎵 背景音乐"
+            let title = isEnglish ? "Background Music" : "背景音乐"
             cell.configure(title: title, isOn: audioManager.isMusicEnabled) { isOn in
                 audioManager.isMusicEnabled = isOn
                 if isOn {
@@ -237,7 +238,7 @@ extension SettingsViewController: UITableViewDataSource {
 
         case .sfxSwitch:
             let cell = tableView.dequeueReusableCell(withIdentifier: "SwitchCell", for: indexPath) as! SwitchTableViewCell
-            let title = isEnglish ? "🔊 Sound Effects" : "🔊 音效"
+            let title = isEnglish ? "Sound Effects" : "音效"
             cell.configure(title: title, isOn: audioManager.isSFXEnabled) { isOn in
                 audioManager.isSFXEnabled = isOn
             }
@@ -286,7 +287,7 @@ extension SettingsViewController: UITableViewDataSource {
         case .rateApp:
             let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
             var config = cell.defaultContentConfiguration()
-            config.text = isEnglish ? "⭐️ Rate Us" : "⭐️ 给我们评分"
+            config.text = isEnglish ? "Rate Us (Soon)" : "给我们评分（暂未开放）"
             config.textProperties.color = UIColor(red: 0.2, green: 0.5, blue: 0.9, alpha: 1.0)
             cell.contentConfiguration = config
             cell.accessoryType = .disclosureIndicator
@@ -295,7 +296,7 @@ extension SettingsViewController: UITableViewDataSource {
         case .privacy:
             let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
             var config = cell.defaultContentConfiguration()
-            config.text = isEnglish ? "📜 Privacy Policy" : "📜 隐私政策"
+            config.text = isEnglish ? "Privacy Policy" : "隐私政策"
             config.textProperties.color = UIColor(red: 0.2, green: 0.5, blue: 0.9, alpha: 1.0)
             cell.contentConfiguration = config
             cell.accessoryType = .disclosureIndicator
@@ -303,8 +304,6 @@ extension SettingsViewController: UITableViewDataSource {
         }
     }
 }
-
-// MARK: - UITableViewDelegate
 
 extension SettingsViewController: UITableViewDelegate {
 
@@ -324,12 +323,9 @@ extension SettingsViewController: UITableViewDelegate {
             break
         }
     }
-
 }
 
-// MARK: - Switch Cell
-
-class SwitchTableViewCell: UITableViewCell {
+final class SwitchTableViewCell: UITableViewCell {
 
     private lazy var switchControl: UISwitch = {
         let s = UISwitch()
@@ -364,18 +360,18 @@ class SwitchTableViewCell: UITableViewCell {
     }
 }
 
-// MARK: - Slider Cell
-
-class SliderTableViewCell: UITableViewCell {
+final class SliderTableViewCell: UITableViewCell {
 
     private lazy var iconLabel: UILabel = {
         let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
         label.font = .systemFont(ofSize: 18)
         return label
     }()
 
     private lazy var titleLabel: UILabel = {
         let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
         label.font = .systemFont(ofSize: 15)
         label.textColor = .darkGray
         return label
@@ -383,6 +379,7 @@ class SliderTableViewCell: UITableViewCell {
 
     private lazy var valueLabel: UILabel = {
         let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
         label.font = .systemFont(ofSize: 14)
         label.textColor = .gray
         label.textAlignment = .right
@@ -391,6 +388,7 @@ class SliderTableViewCell: UITableViewCell {
 
     private lazy var slider: UISlider = {
         let s = UISlider()
+        s.translatesAutoresizingMaskIntoConstraints = false
         s.minimumValue = 0
         s.maximumValue = 1
         s.minimumTrackTintColor = UIColor(red: 0.2, green: 0.5, blue: 0.9, alpha: 1.0)
@@ -416,29 +414,23 @@ class SliderTableViewCell: UITableViewCell {
         contentView.addSubview(valueLabel)
         contentView.addSubview(slider)
 
-        iconLabel.snp.makeConstraints { make in
-            make.left.equalToSuperview().offset(16)
-            make.top.equalToSuperview().offset(12)
-            make.width.equalTo(24)
-        }
+        NSLayoutConstraint.activate([
+            iconLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            iconLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 12),
+            iconLabel.widthAnchor.constraint(equalToConstant: 24),
 
-        titleLabel.snp.makeConstraints { make in
-            make.left.equalTo(iconLabel.snp.right).offset(8)
-            make.centerY.equalTo(iconLabel)
-        }
+            titleLabel.leadingAnchor.constraint(equalTo: iconLabel.trailingAnchor, constant: 8),
+            titleLabel.centerYAnchor.constraint(equalTo: iconLabel.centerYAnchor),
 
-        valueLabel.snp.makeConstraints { make in
-            make.right.equalToSuperview().offset(-16)
-            make.centerY.equalTo(iconLabel)
-            make.width.equalTo(50)
-        }
+            valueLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            valueLabel.centerYAnchor.constraint(equalTo: iconLabel.centerYAnchor),
+            valueLabel.widthAnchor.constraint(equalToConstant: 54),
 
-        slider.snp.makeConstraints { make in
-            make.left.equalToSuperview().offset(16)
-            make.right.equalToSuperview().offset(-16)
-            make.top.equalTo(iconLabel.snp.bottom).offset(8)
-            make.bottom.equalToSuperview().offset(-12)
-        }
+            slider.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            slider.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            slider.topAnchor.constraint(equalTo: iconLabel.bottomAnchor, constant: 8),
+            slider.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12)
+        ])
     }
 
     func configure(title: String, value: Float, icon: String, onChanged: @escaping (Float) -> Void) {

@@ -2,7 +2,7 @@ import UIKit
 import SpriteKit
 
 /// 游戏主界面（SpriteKit 场景）
-class GameViewController: UIViewController {
+final class GameViewController: UIViewController {
 
     private let level: Int
     private var scene: GameScene!
@@ -14,6 +14,10 @@ class GameViewController: UIViewController {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     override func viewDidLoad() {

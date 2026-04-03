@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 // MARK: - 冰块类型
@@ -33,10 +34,29 @@ struct LevelConfig {
     }
 }
 
+enum LevelTheme {
+    case sunrise
+    case glacier
+    case aurora
+}
+
+enum LevelMotionStyle {
+    case none
+    case glide
+    case hover
+}
+
+struct LevelScorePlan {
+    let targetScore: Int
+    let oneStarScore: Int
+    let twoStarScore: Int
+    let threeStarScore: Int
+    let perfectScore: Int
+}
+
 // MARK: - 15关配置数组
 
 struct Levels {
-
     /// 根据关卡号获取配置
     static func config(for level: Int) -> LevelConfig {
         return allLevels[min(max(level, 1), 15) - 1]
@@ -44,6 +64,64 @@ struct Levels {
 
     /// 总关卡数
     static let totalLevels = 15
+
+    static func theme(for level: Int) -> LevelTheme {
+        switch level {
+        case 1...5:
+            return .sunrise
+        case 6...10:
+            return .glacier
+        default:
+            return .aurora
+        }
+    }
+
+    static func motionStyle(for level: Int) -> LevelMotionStyle {
+        switch level {
+        case 8, 9, 11, 13:
+            return .glide
+        case 12, 14, 15:
+            return .hover
+        default:
+            return .none
+        }
+    }
+
+    static func scorePlan(for config: LevelConfig) -> LevelScorePlan {
+        let baseScore = config.iceBlocks.reduce(0) { partialResult, block in
+            partialResult + blockScore(for: block.type)
+        }
+        let perfectScore = baseScore
+            + config.penguinCount * GameScore.remainingPenguinBonus
+            + levelClearBonus(for: config.levelNumber)
+
+        let oneStar = max(Int(Double(perfectScore) * 0.45), baseScore / 2)
+        let twoStar = max(Int(Double(perfectScore) * 0.65), oneStar + 120)
+        let threeStar = max(Int(Double(perfectScore) * 0.85), twoStar + 120)
+
+        return LevelScorePlan(
+            targetScore: twoStar,
+            oneStarScore: oneStar,
+            twoStarScore: twoStar,
+            threeStarScore: threeStar,
+            perfectScore: perfectScore
+        )
+    }
+
+    static func blockScore(for type: IceBlockType) -> Int {
+        switch type {
+        case .normal:
+            return GameScore.normalIceBlock
+        case .cracked:
+            return GameScore.crackedIceBlock
+        case .explosive:
+            return GameScore.explosiveIceBlock
+        }
+    }
+
+    static func levelClearBonus(for level: Int) -> Int {
+        GameScore.clearBonusBase + level * GameScore.clearBonusStep
+    }
 
     /// 全部15关配置
     static let allLevels: [LevelConfig] = [
