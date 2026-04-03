@@ -18,7 +18,7 @@ final class MenuViewController: UIViewController {
     private lazy var subtitleLabel: UILabel = {
         let label = UILabel()
         label.translatesAutoresizingMaskIntoConstraints = false
-        label.text = "弹弓起手，清空冰塔，冲击三星。"
+        label.text = "弹弓起手，清空冰塔，冲击三星和精英勋章。"
         label.font = .systemFont(ofSize: 17, weight: .medium)
         label.textColor = UIColor(red: 0.30, green: 0.43, blue: 0.56, alpha: 1.0)
         label.textAlignment = .center
@@ -192,10 +192,11 @@ final class MenuViewController: UIViewController {
     private func updateProgressSummary() {
         let totalStars = (1...Levels.totalLevels).reduce(0) { $0 + SaveManager.shared.stars(for: $1) }
         let bestScore = SaveManager.shared.topScores(limit: 1).first?.score ?? 0
+        let medals = SaveManager.shared.completedChallengeCount
         let unlocked = SaveManager.shared.unlockedLevels
 
         progressValueLabel.text = "已解锁 \(min(unlocked, Levels.totalLevels))/\(Levels.totalLevels) 关"
-        progressDetailLabel.text = "累计星星 \(totalStars) / \(Levels.totalLevels * 3)\n当前最高分 \(bestScore)"
+        progressDetailLabel.text = "累计星星 \(totalStars) / \(Levels.totalLevels * 3)\n精英勋章 \(medals) / \(Levels.totalLevels) · 当前最高分 \(bestScore)"
     }
 
     @objc private func startGameTapped() {

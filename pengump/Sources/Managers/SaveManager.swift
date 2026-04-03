@@ -15,7 +15,7 @@ class SaveManager {
     static let shared = SaveManager()
 
     private let defaults = UserDefaults.standard
-    private let currentSaveDataVersion = 2
+    private let currentSaveDataVersion = 3
     private let maxStaminaValue = 30
 
     // UserDefaults keys
@@ -27,12 +27,14 @@ class SaveManager {
         static let stamina = "stamina"
         static let lastStaminaUpdate = "last_stamina_update"
         static let hasRecord = "has_record"
+        static let completedChallenges = "completed_challenges"
     }
 
     // MARK: - 数据属性
 
     var highestScores: [Int: ScoreRecord] = [:]  // 每关最高分
     var unlockedLevels: Int = 1                   // 已解锁最高关卡
+    var completedChallenges: Set<Int> = []
 
     // 兼容旧经济字段（免费版主流程不依赖）
     var coins: Int = 0
@@ -61,6 +63,12 @@ class SaveManager {
         unlockedLevels = defaults.integer(forKey: Keys.unlockedLevels)
         if unlockedLevels <= 0 { unlockedLevels = 1 }
 
+        if let completed = defaults.array(forKey: Keys.completedChallenges) as? [Int] {
+            completedChallenges = Set(completed)
+        } else {
+            completedChallenges = []
+        }
+
         // 兼容读取旧经济字段（但不驱动免费版主流程）
         coins = defaults.integer(forKey: Keys.coins)
         let persistedStamina = defaults.integer(forKey: Keys.stamina)
@@ -80,9 +88,9 @@ class SaveManager {
             defaults.set(true, forKey: Keys.hasRecord)
         }
 
-        // 迁移：旧版本（无版本号）升级到 v2
+        // 迁移：旧版本（无版本号）升级到当前版本
         if !hasVersionMarker {
-            migrateToV2()
+            migrateToCurrentVersion()
         } else {
             let savedVersion = defaults.integer(forKey: Keys.saveDataVersion)
             if savedVersion < currentSaveDataVersion {
@@ -98,6 +106,7 @@ class SaveManager {
         }
 
         defaults.set(unlockedLevels, forKey: Keys.unlockedLevels)
+        defaults.set(Array(completedChallenges).sorted(), forKey: Keys.completedChallenges)
 
         // 兼容写回旧经济字段（免费版主流程不依赖）
         defaults.set(coins, forKey: Keys.coins)
@@ -108,7 +117,7 @@ class SaveManager {
         defaults.set(currentSaveDataVersion, forKey: Keys.saveDataVersion)
     }
 
-    private func migrateToV2() {
+    private func migrateToCurrentVersion() {
         // 不清空任何历史关卡与分数，仅补版本标记
         defaults.set(currentSaveDataVersion, forKey: Keys.saveDataVersion)
 
@@ -122,6 +131,7 @@ class SaveManager {
         return defaults.object(forKey: Keys.hasRecord) != nil
             || defaults.object(forKey: Keys.highestScores) != nil
             || defaults.object(forKey: Keys.unlockedLevels) != nil
+            || defaults.object(forKey: Keys.completedChallenges) != nil
             || defaults.object(forKey: Keys.coins) != nil
             || defaults.object(forKey: Keys.stamina) != nil
             || defaults.object(forKey: Keys.lastStaminaUpdate) != nil
@@ -135,7 +145,12 @@ class SaveManager {
 
         if let existing = highestScores[level] {
             if score > existing.score {
-                highestScores[level] = record
+                highestScores[level] = ScoreRecord(
+                    level: level,
+                    score: score,
+                    stars: max(existing.stars, stars),
+                    date: Date()
+                )
             } else if stars > existing.stars {
                 // 星级更高时也更新
                 highestScores[level] = ScoreRecord(level: level, score: max(score, existing.score), stars: stars, date: existing.date)
@@ -155,6 +170,23 @@ class SaveManager {
     /// 获取关卡星级
     func stars(for level: Int) -> Int {
         highestScores[level]?.stars ?? 0
+    }
+
+    func isChallengeCompleted(_ level: Int) -> Bool {
+        completedChallenges.contains(level)
+    }
+
+    @discardableResult
+    func markChallengeCompleted(_ level: Int) -> Bool {
+        let inserted = completedChallenges.insert(level).inserted
+        if inserted {
+            save()
+        }
+        return inserted
+    }
+
+    var completedChallengeCount: Int {
+        completedChallenges.count
     }
 
     /// 检查关卡是否已解锁

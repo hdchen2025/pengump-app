@@ -94,8 +94,9 @@ final class LevelSelectViewController: UIViewController {
 
     private func refreshSummary() {
         let totalStars = (1...totalLevels).reduce(0) { $0 + SaveManager.shared.stars(for: $1) }
+        let totalMedals = SaveManager.shared.completedChallengeCount
         let unlocked = min(SaveManager.shared.unlockedLevels, totalLevels)
-        summaryLabel.text = "已解锁 \(unlocked)/\(totalLevels) 关  ·  已获得 \(totalStars) 颗星"
+        summaryLabel.text = "已解锁 \(unlocked)/\(totalLevels) 关  ·  已获得 \(totalStars) 颗星\n精英勋章 \(totalMedals)/\(totalLevels)"
     }
 
     @objc private func backTapped() {
@@ -138,7 +139,14 @@ extension LevelSelectViewController: UICollectionViewDataSource {
         let isUnlocked = SaveManager.shared.isLevelUnlocked(level)
         let stars = SaveManager.shared.stars(for: level)
         let isCurrent = level == min(SaveManager.shared.unlockedLevels, totalLevels)
-        cell.configure(levelNumber: level, isUnlocked: isUnlocked, stars: stars, isCurrent: isCurrent)
+        cell.configure(
+            levelNumber: level,
+            isUnlocked: isUnlocked,
+            stars: stars,
+            isCurrent: isCurrent,
+            badgeText: Levels.levelBadge(for: level),
+            hasMedal: SaveManager.shared.isChallengeCompleted(level)
+        )
         return cell
     }
 }
@@ -155,7 +163,7 @@ extension LevelSelectViewController: UICollectionViewDelegateFlowLayout {
         let spacing: CGFloat = 28
         let availableWidth = collectionView.bounds.width - horizontalPadding - spacing
         let cellWidth = floor(availableWidth / 3)
-        return CGSize(width: max(cellWidth, 80), height: 100)
+        return CGSize(width: max(cellWidth, 80), height: 108)
     }
 }
 
@@ -164,6 +172,7 @@ final class LevelCell: UICollectionViewCell {
     private let numberLabel = UILabel()
     private let starLabel = UILabel()
     private let subtitleLabel = UILabel()
+    private let medalLabel = UILabel()
     private let lockOverlay = UIView()
     private let lockIcon = UILabel()
 
@@ -198,6 +207,17 @@ final class LevelCell: UICollectionViewCell {
         subtitleLabel.font = .systemFont(ofSize: 11, weight: .medium)
         subtitleLabel.textAlignment = .center
         subtitleLabel.textColor = UIColor.white.withAlphaComponent(0.8)
+        subtitleLabel.numberOfLines = 2
+
+        medalLabel.translatesAutoresizingMaskIntoConstraints = false
+        medalLabel.font = .systemFont(ofSize: 10, weight: .bold)
+        medalLabel.textAlignment = .center
+        medalLabel.textColor = UIColor(red: 0.54, green: 0.31, blue: 0.02, alpha: 1.0)
+        medalLabel.backgroundColor = UIColor(red: 1.0, green: 0.89, blue: 0.49, alpha: 0.96)
+        medalLabel.layer.cornerRadius = 8
+        medalLabel.layer.masksToBounds = true
+        medalLabel.text = "精英"
+        medalLabel.isHidden = true
 
         lockOverlay.translatesAutoresizingMaskIntoConstraints = false
         lockOverlay.backgroundColor = UIColor.black.withAlphaComponent(0.45)
@@ -212,10 +232,16 @@ final class LevelCell: UICollectionViewCell {
         contentView.addSubview(numberLabel)
         contentView.addSubview(starLabel)
         contentView.addSubview(subtitleLabel)
+        contentView.addSubview(medalLabel)
         contentView.addSubview(lockOverlay)
         lockOverlay.addSubview(lockIcon)
 
         NSLayoutConstraint.activate([
+            medalLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 10),
+            medalLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -10),
+            medalLabel.widthAnchor.constraint(equalToConstant: 34),
+            medalLabel.heightAnchor.constraint(equalToConstant: 16),
+
             numberLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             numberLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor, constant: -14),
 
@@ -237,15 +263,18 @@ final class LevelCell: UICollectionViewCell {
         ])
     }
 
-    func configure(levelNumber: Int, isUnlocked: Bool, stars: Int, isCurrent: Bool) {
+    func configure(levelNumber: Int, isUnlocked: Bool, stars: Int, isCurrent: Bool, badgeText: String, hasMedal: Bool) {
         numberLabel.text = "\(levelNumber)"
-        subtitleLabel.text = isCurrent && isUnlocked ? "当前进度" : (isUnlocked ? "已开放" : "")
+        subtitleLabel.text = isUnlocked
+            ? (isCurrent ? "当前进度\n\(badgeText)" : badgeText)
+            : ""
 
         if isUnlocked {
             lockOverlay.isHidden = true
             numberLabel.isHidden = false
             starLabel.isHidden = false
             subtitleLabel.isHidden = false
+            medalLabel.isHidden = !hasMedal
 
             if stars > 0 {
                 starLabel.text = String(repeating: "⭐", count: stars)
@@ -269,6 +298,7 @@ final class LevelCell: UICollectionViewCell {
             numberLabel.isHidden = true
             starLabel.isHidden = true
             subtitleLabel.isHidden = true
+            medalLabel.isHidden = true
             contentView.backgroundColor = UIColor(white: 0.55, alpha: 1.0)
         }
     }

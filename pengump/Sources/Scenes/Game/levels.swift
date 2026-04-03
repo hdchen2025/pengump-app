@@ -44,6 +44,28 @@ enum LevelMotionStyle: Equatable {
     case none
     case glide
     case hover
+    case weave
+}
+
+enum LevelWindStyle: Equatable {
+    case none
+    case tailwind
+    case headwind
+    case gust
+}
+
+enum LevelChallengeKind: Equatable {
+    case precision(maxShots: Int)
+    case combo(minBlocks: Int)
+    case survivor(minRemainingPenguins: Int)
+    case demolition(minExplosiveBlocks: Int)
+}
+
+struct LevelChallengePlan {
+    let shortTitle: String
+    let detail: String
+    let bonusScore: Int
+    let kind: LevelChallengeKind
 }
 
 struct LevelScorePlan {
@@ -80,10 +102,83 @@ struct Levels {
         switch level {
         case 8, 9, 11, 13:
             return .glide
-        case 12, 14, 15:
+        case 12:
             return .hover
+        case 14, 15:
+            return .weave
         default:
             return .none
+        }
+    }
+
+    static func windStyle(for level: Int) -> LevelWindStyle {
+        switch level {
+        case 9, 11:
+            return .tailwind
+        case 10, 14:
+            return .headwind
+        case 12, 13, 15:
+            return .gust
+        default:
+            return .none
+        }
+    }
+
+    static func challengePlan(for level: Int) -> LevelChallengePlan {
+        switch level {
+        case 1:
+            return LevelChallengePlan(shortTitle: "精准出手", detail: "2 发内通关", bonusScore: 120, kind: .precision(maxShots: 2))
+        case 2:
+            return LevelChallengePlan(shortTitle: "连锁入门", detail: "单发击碎 2 块", bonusScore: 140, kind: .combo(minBlocks: 2))
+        case 3:
+            return LevelChallengePlan(shortTitle: "留有余力", detail: "保留 1 只企鹅", bonusScore: 140, kind: .survivor(minRemainingPenguins: 1))
+        case 4:
+            return LevelChallengePlan(shortTitle: "快刀斩乱麻", detail: "3 发内通关", bonusScore: 150, kind: .precision(maxShots: 3))
+        case 5:
+            return LevelChallengePlan(shortTitle: "裂纹清扫", detail: "单发击碎 3 块", bonusScore: 160, kind: .combo(minBlocks: 3))
+        case 6:
+            return LevelChallengePlan(shortTitle: "稳扎稳打", detail: "保留 2 只企鹅", bonusScore: 180, kind: .survivor(minRemainingPenguins: 2))
+        case 7:
+            return LevelChallengePlan(shortTitle: "爆破专家", detail: "引爆 2 个爆炸块", bonusScore: 220, kind: .demolition(minExplosiveBlocks: 2))
+        case 8:
+            return LevelChallengePlan(shortTitle: "快节奏", detail: "4 发内通关", bonusScore: 200, kind: .precision(maxShots: 4))
+        case 9:
+            return LevelChallengePlan(shortTitle: "顺风连锁", detail: "单发击碎 4 块", bonusScore: 220, kind: .combo(minBlocks: 4))
+        case 10:
+            return LevelChallengePlan(shortTitle: "堡垒余震", detail: "保留 2 只企鹅", bonusScore: 220, kind: .survivor(minRemainingPenguins: 2))
+        case 11:
+            return LevelChallengePlan(shortTitle: "空中爆破", detail: "引爆 2 个爆炸块", bonusScore: 260, kind: .demolition(minExplosiveBlocks: 2))
+        case 12:
+            return LevelChallengePlan(shortTitle: "倒塔连爆", detail: "单发击碎 5 块", bonusScore: 260, kind: .combo(minBlocks: 5))
+        case 13:
+            return LevelChallengePlan(shortTitle: "精英余裕", detail: "保留 3 只企鹅", bonusScore: 280, kind: .survivor(minRemainingPenguins: 3))
+        case 14:
+            return LevelChallengePlan(shortTitle: "火线连爆", detail: "引爆 3 个爆炸块", bonusScore: 320, kind: .demolition(minExplosiveBlocks: 3))
+        default:
+            return LevelChallengePlan(shortTitle: "王城连锁", detail: "引爆 4 个爆炸块", bonusScore: 360, kind: .demolition(minExplosiveBlocks: 4))
+        }
+    }
+
+    static func levelBadge(for level: Int) -> String {
+        let challenge = challengePlan(for: level).shortTitle
+        switch windStyle(for: level) {
+        case .tailwind:
+            return "\(challenge) · 顺风"
+        case .headwind:
+            return "\(challenge) · 逆风"
+        case .gust:
+            return "\(challenge) · 阵风"
+        case .none:
+            switch motionStyle(for: level) {
+            case .glide:
+                return "\(challenge) · 滑行靶"
+            case .hover:
+                return "\(challenge) · 悬浮靶"
+            case .weave:
+                return "\(challenge) · 变轨靶"
+            case .none:
+                return challenge
+            }
         }
     }
 
