@@ -18,7 +18,7 @@ final class MenuViewController: UIViewController {
     private lazy var subtitleLabel: UILabel = {
         let label = UILabel()
         label.translatesAutoresizingMaskIntoConstraints = false
-        label.text = "弹弓起手，清空冰塔，冲击三星和精英勋章。"
+        label.text = "投送王牌企鹅，推进三章战役，冲击三星和精英勋章。"
         label.font = .systemFont(ofSize: 17, weight: .medium)
         label.textColor = UIColor(red: 0.30, green: 0.43, blue: 0.56, alpha: 1.0)
         label.textAlignment = .center
@@ -194,9 +194,15 @@ final class MenuViewController: UIViewController {
         let bestScore = SaveManager.shared.topScores(limit: 1).first?.score ?? 0
         let medals = SaveManager.shared.completedChallengeCount
         let unlocked = SaveManager.shared.unlockedLevels
+        let spotlightLevel = min(max(unlocked, 1), Levels.totalLevels)
+        let presentation = Levels.presentation(for: spotlightLevel)
+        let nextBattlePrefix = presentation.isBossLevel ? "下一战 BOSS" : "下一战"
 
         progressValueLabel.text = "已解锁 \(min(unlocked, Levels.totalLevels))/\(Levels.totalLevels) 关"
-        progressDetailLabel.text = "累计星星 \(totalStars) / \(Levels.totalLevels * 3)\n精英勋章 \(medals) / \(Levels.totalLevels) · 当前最高分 \(bestScore)"
+        progressDetailLabel.text = """
+        星 \(totalStars) / \(Levels.totalLevels * 3) · 勋章 \(medals) / \(Levels.totalLevels) · 最高分 \(bestScore)
+        当前战区 \(presentation.chapterTitle) · \(nextBattlePrefix) \(presentation.operationTitle)
+        """
     }
 
     @objc private func startGameTapped() {

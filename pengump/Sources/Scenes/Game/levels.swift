@@ -76,6 +76,13 @@ struct LevelScorePlan {
     let perfectScore: Int
 }
 
+struct LevelPresentation {
+    let chapterTitle: String
+    let operationTitle: String
+    let briefing: String
+    let isBossLevel: Bool
+}
+
 // MARK: - 15关配置数组
 
 struct Levels {
@@ -179,6 +186,41 @@ struct Levels {
             case .none:
                 return challenge
             }
+        }
+    }
+
+    static func presentation(for level: Int) -> LevelPresentation {
+        switch level {
+        case 1:
+            return LevelPresentation(chapterTitle: "第一章 · 破冰序章", operationTitle: "试飞行动", briefing: "熟悉弹弓与落点，打出第一场漂亮进攻。", isBossLevel: false)
+        case 2:
+            return LevelPresentation(chapterTitle: "第一章 · 破冰序章", operationTitle: "阵列清扫", briefing: "利用反弹和夹角，追求更高效的破阵节奏。", isBossLevel: false)
+        case 3:
+            return LevelPresentation(chapterTitle: "第一章 · 破冰序章", operationTitle: "高塔拆解", briefing: "学会攻击支点，让塔自己倒。", isBossLevel: false)
+        case 4:
+            return LevelPresentation(chapterTitle: "第一章 · 破冰序章", operationTitle: "双塔诱导", briefing: "先破外侧，再收中心，控制全场节奏。", isBossLevel: false)
+        case 5:
+            return LevelPresentation(chapterTitle: "第一章 · 破冰序章", operationTitle: "裂冰首领", briefing: "首个堡垒战，考验省弹与控场。", isBossLevel: true)
+        case 6:
+            return LevelPresentation(chapterTitle: "第二章 · 寒潮推进", operationTitle: "冰岭推进", briefing: "战线拉长后，稳定命中比蛮力更重要。", isBossLevel: false)
+        case 7:
+            return LevelPresentation(chapterTitle: "第二章 · 寒潮推进", operationTitle: "爆破危机", briefing: "火力点已经出现，连锁才是真正的主角。", isBossLevel: false)
+        case 8:
+            return LevelPresentation(chapterTitle: "第二章 · 寒潮推进", operationTitle: "追击滑靶", briefing: "移动目标登场，节拍感决定命中率。", isBossLevel: false)
+        case 9:
+            return LevelPresentation(chapterTitle: "第二章 · 寒潮推进", operationTitle: "顺风斩阵", briefing: "借风势做更远的连锁，把一发价值打满。", isBossLevel: false)
+        case 10:
+            return LevelPresentation(chapterTitle: "第二章 · 寒潮推进", operationTitle: "寒堡总攻", briefing: "中盘 Boss 战，要求你在风中拆掉整座堡垒。", isBossLevel: true)
+        case 11:
+            return LevelPresentation(chapterTitle: "第三章 · 极光决战", operationTitle: "空域清场", briefing: "高空目标与风场叠加，开始进入终局难度。", isBossLevel: false)
+        case 12:
+            return LevelPresentation(chapterTitle: "第三章 · 极光决战", operationTitle: "倒塔反击", briefing: "复杂结构会放大每次决策的收益与失误。", isBossLevel: false)
+        case 13:
+            return LevelPresentation(chapterTitle: "第三章 · 极光决战", operationTitle: "极地试炼", briefing: "这是精英关，要求稳定输出与局面判断。", isBossLevel: false)
+        case 14:
+            return LevelPresentation(chapterTitle: "第三章 · 极光决战", operationTitle: "火线突围", briefing: "变轨与爆破同时上场，开始真正的攻坚战。", isBossLevel: false)
+        default:
+            return LevelPresentation(chapterTitle: "第三章 · 极光决战", operationTitle: "王城终幕", briefing: "终局 Boss 战，集中火力攻破企鹅王城。", isBossLevel: true)
         }
     }
 

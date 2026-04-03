@@ -233,6 +233,19 @@ private struct VictoryBonusSummary {
     }
 }
 
+private struct OverdriveConfig {
+    static let maxCharge: CGFloat = 100
+    static let normalCharge: CGFloat = 18
+    static let crackedCharge: CGFloat = 24
+    static let explosiveCharge: CGFloat = 34
+    static let speedMultiplier: CGFloat = 1.14
+    static let damageMultiplier: Double = 1.5
+    static let bounceRetention: CGFloat = 0.88
+    static let shockwaveRadius: CGFloat = 72
+    static let shockwaveDamage: Int = 1
+    static let maxShockwavesPerShot = 2
+}
+
 // MARK: - 游戏主场景
 
 final class GameScene: SKScene {
@@ -240,6 +253,7 @@ final class GameScene: SKScene {
     private let currentLevel: Int
     private let levelConfig: LevelConfig
     private let levelTheme: LevelTheme
+    private let levelPresentation: LevelPresentation
     private let scorePlan: LevelScorePlan
     private let windStyle: LevelWindStyle
     private let challengePlan: LevelChallengePlan
@@ -249,6 +263,13 @@ final class GameScene: SKScene {
     private var roundComboCount: Int = 0
     private var bestShotDestroyedCount: Int = 0
     private var explosiveBlocksDestroyedCount: Int = 0
+    private var overdriveCharge: CGFloat = 0
+    private var overdriveReady = false
+    private var activePenguinOverdrive = false
+    private var overdriveShockwavesRemaining = 0
+    private var overdriveActivations = 0
+    private var finalAssaultTriggered = false
+    private var windIntensityMultiplier: CGFloat = 1
     private var flightState: PenguinFlightState = .ready
     private var launchTime: TimeInterval = 0
     private var lastUpdateTime: TimeInterval = 0
@@ -276,14 +297,18 @@ final class GameScene: SKScene {
     private var targetLabel: SKLabelNode!
     private var challengeLabel: SKLabelNode!
     private var bestScoreLabel: SKLabelNode!
+    private var overdriveFillNode: SKSpriteNode!
+    private var overdriveStatusLabel: SKLabelNode!
     private var hintLabel: SKLabelNode?
     private var ruleLabel: SKLabelNode?
     private var windLabel: SKLabelNode?
+    private var phaseLabel: SKLabelNode?
 
     init(level: Int) {
         currentLevel = level
         levelConfig = Levels.config(for: level)
         levelTheme = Levels.theme(for: level)
+        levelPresentation = Levels.presentation(for: level)
         scorePlan = Levels.scorePlan(for: levelConfig)
         windStyle = Levels.windStyle(for: level)
         challengePlan = Levels.challengePlan(for: level)
@@ -311,6 +336,7 @@ final class GameScene: SKScene {
         setupIceBlocks()
         setupGround()
         reloadSlingshot()
+        showLevelIntroBanner()
     }
 
     private var palette: LevelPalette {
@@ -620,6 +646,7 @@ final class GameScene: SKScene {
         penguinNode = penguin
         updateBandPositions(penguinPos: launchPos)
         flightState = .ready
+        prepareLoadedPenguinForOverdriveIfNeeded()
     }
 
     private func setupTrajectoryLine() {
@@ -650,7 +677,7 @@ final class GameScene: SKScene {
         addChild(scoreLabel)
 
         levelLabel = makeHUDLabel(fontSize: 18, color: secondaryTextColor)
-        levelLabel.text = "第 \(currentLevel) 关"
+        levelLabel.text = "第 \(currentLevel) 关 · \(levelPresentation.operationTitle)"
         levelLabel.position = CGPoint(x: frame.midX, y: frame.height - 72)
         addChild(levelLabel)
 
@@ -663,6 +690,7 @@ final class GameScene: SKScene {
         challengeLabel.position = CGPoint(x: frame.midX, y: frame.height - 118)
         addChild(challengeLabel)
         updateChallengeDisplay()
+        setupOverdriveHUD()
 
         penguinCountLabel = makeHUDLabel(fontSize: 20, color: titleColor)
         penguinCountLabel.text = "🐧 × \(penguinsRemaining)"
@@ -691,7 +719,13 @@ final class GameScene: SKScene {
             label.position = CGPoint(x: frame.width - 76, y: statusY)
             addChild(label)
             windLabel = label
+            statusY -= 22
         }
+
+        let label = makeHUDLabel(fontSize: 12, color: UIColor(red: 1.0, green: 0.84, blue: 0.36, alpha: 1))
+        label.position = CGPoint(x: frame.width - 76, y: statusY)
+        addChild(label)
+        phaseLabel = label
 
         let hintText = combinedHintText()
         if !hintText.isEmpty {
@@ -708,6 +742,8 @@ final class GameScene: SKScene {
                 .fadeOut(withDuration: 0.8)
             ]))
         }
+
+        updatePhaseDisplay()
     }
 
     private var titleColor: UIColor {
@@ -735,11 +771,245 @@ final class GameScene: SKScene {
         return node
     }
 
+    private func setupOverdriveHUD() {
+        let titleLabel = makeHUDLabel(fontSize: 12, color: secondaryTextColor)
+        titleLabel.text = "王牌技"
+        titleLabel.horizontalAlignmentMode = .left
+        titleLabel.position = CGPoint(x: 110, y: frame.height - 34)
+        addChild(titleLabel)
+
+        let frameNode = SKShapeNode(rectOf: CGSize(width: 112, height: 14), cornerRadius: 7)
+        frameNode.fillColor = UIColor(white: 1, alpha: 0.18)
+        frameNode.strokeColor = UIColor(white: 1, alpha: 0.28)
+        frameNode.lineWidth = 1.2
+        frameNode.position = CGPoint(x: 162, y: frame.height - 52)
+        addChild(frameNode)
+
+        let fillNode = SKSpriteNode(color: palette.accent, size: CGSize(width: 104, height: 8))
+        fillNode.anchorPoint = CGPoint(x: 0, y: 0.5)
+        fillNode.position = CGPoint(x: frameNode.position.x - 52, y: frameNode.position.y)
+        fillNode.alpha = 0.9
+        addChild(fillNode)
+        overdriveFillNode = fillNode
+
+        overdriveStatusLabel = makeHUDLabel(fontSize: 11, color: secondaryTextColor)
+        overdriveStatusLabel.position = CGPoint(x: frameNode.position.x, y: frameNode.position.y - 16)
+        addChild(overdriveStatusLabel)
+        updateOverdriveDisplay(animated: false)
+    }
+
+    private func overdriveChargeForBlock(_ type: IceBlockType) -> CGFloat {
+        switch type {
+        case .normal:
+            return OverdriveConfig.normalCharge
+        case .cracked:
+            return OverdriveConfig.crackedCharge
+        case .explosive:
+            return OverdriveConfig.explosiveCharge
+        }
+    }
+
+    private func addOverdriveCharge(for type: IceBlockType) {
+        guard !activePenguinOverdrive else { return }
+        guard !overdriveReady else { return }
+
+        overdriveCharge = min(OverdriveConfig.maxCharge, overdriveCharge + overdriveChargeForBlock(type))
+        if overdriveCharge >= OverdriveConfig.maxCharge {
+            overdriveReady = true
+            showAnnouncement(text: "王牌技就绪", color: UIColor(red: 1.0, green: 0.86, blue: 0.36, alpha: 1))
+            prepareLoadedPenguinForOverdriveIfNeeded()
+        }
+        updateOverdriveDisplay()
+    }
+
+    private func updateOverdriveDisplay(animated: Bool = true) {
+        let progress = overdriveReady ? 1 : max(0, min(overdriveCharge / OverdriveConfig.maxCharge, 1))
+        let targetWidth = 104 * progress
+        let updateBlock = {
+            self.overdriveFillNode.color = self.overdriveReady
+                ? UIColor(red: 1.0, green: 0.83, blue: 0.28, alpha: 1)
+                : self.palette.accent
+            self.overdriveStatusLabel.text = self.overdriveReady
+                ? "下一发进入爆发态"
+                : "充能 \(Int(progress * 100))%"
+            self.overdriveStatusLabel.fontColor = self.overdriveReady
+                ? UIColor(red: 1.0, green: 0.86, blue: 0.36, alpha: 1)
+                : self.secondaryTextColor
+        }
+
+        guard animated else {
+            overdriveFillNode.size.width = max(targetWidth, progress > 0 ? 8 : 2)
+            updateBlock()
+            return
+        }
+
+        let resize = SKAction.resize(toWidth: max(targetWidth, progress > 0 ? 8 : 2), duration: 0.18)
+        resize.timingMode = .easeOut
+        overdriveFillNode.run(resize)
+        updateBlock()
+    }
+
+    private func prepareLoadedPenguinForOverdriveIfNeeded() {
+        guard overdriveReady, let penguin = penguinNode else { return }
+        guard penguin.childNode(withName: "overdriveAura") == nil else { return }
+
+        let aura = SKShapeNode(circleOfRadius: 22)
+        aura.name = "overdriveAura"
+        aura.fillColor = UIColor(red: 1.0, green: 0.86, blue: 0.36, alpha: 0.2)
+        aura.strokeColor = UIColor(red: 1.0, green: 0.86, blue: 0.36, alpha: 0.9)
+        aura.lineWidth = 2
+        aura.zPosition = -1
+        penguin.addChild(aura)
+
+        let pulse = SKAction.sequence([
+            .group([.scale(to: 1.08, duration: 0.35), .fadeAlpha(to: 0.38, duration: 0.35)]),
+            .group([.scale(to: 0.94, duration: 0.35), .fadeAlpha(to: 0.78, duration: 0.35)])
+        ])
+        aura.run(.repeatForever(pulse), withKey: "overdrivePulse")
+    }
+
+    private func activateOverdriveIfNeeded(at position: CGPoint) {
+        guard overdriveReady else {
+            activePenguinOverdrive = false
+            overdriveShockwavesRemaining = 0
+            return
+        }
+
+        overdriveReady = false
+        activePenguinOverdrive = true
+        overdriveShockwavesRemaining = OverdriveConfig.maxShockwavesPerShot
+        overdriveActivations += 1
+        overdriveCharge = 0
+        updateOverdriveDisplay()
+        showAnnouncement(text: "王牌出击", color: UIColor(red: 1.0, green: 0.84, blue: 0.34, alpha: 1), position: CGPoint(x: frame.midX, y: frame.midY + 84))
+        ParticleEffects.shared.playStarBurst(at: position, in: self)
+    }
+
+    private func triggerOverdriveShockwave(at position: CGPoint, excluding sourceBlock: IceBlockNode) {
+        let pulse = SKShapeNode(circleOfRadius: OverdriveConfig.shockwaveRadius)
+        pulse.fillColor = UIColor(red: 1.0, green: 0.83, blue: 0.24, alpha: 0.16)
+        pulse.strokeColor = UIColor(red: 1.0, green: 0.93, blue: 0.58, alpha: 0.95)
+        pulse.lineWidth = 3
+        pulse.position = position
+        pulse.zPosition = 32
+        pulse.setScale(0.2)
+        addChild(pulse)
+
+        let expand = SKAction.scale(to: 1.15, duration: 0.16)
+        expand.timingMode = .easeOut
+        pulse.run(.sequence([
+            .group([expand, .fadeOut(withDuration: 0.16)]),
+            .removeFromParent()
+        ]))
+
+        for block in iceBlocks where !block.isBreaking && block.parent != nil {
+            if block === sourceBlock {
+                continue
+            }
+            let distance = hypot(block.position.x - position.x, block.position.y - position.y)
+            if distance > OverdriveConfig.shockwaveRadius {
+                continue
+            }
+
+            let destroyed = block.takeDamage(OverdriveConfig.shockwaveDamage)
+            if destroyed {
+                destroyBlock(block, triggerLinkedExplosion: false)
+            } else {
+                AudioManager.shared.playIceHitSound()
+            }
+        }
+    }
+
+    private func showAnnouncement(text: String, color: UIColor, position: CGPoint? = nil) {
+        let label = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        label.text = text
+        label.fontSize = 24
+        label.fontColor = color
+        label.position = position ?? CGPoint(x: frame.midX, y: frame.midY + 70)
+        label.zPosition = 70
+        label.alpha = 0
+        addChild(label)
+
+        label.setScale(0.6)
+        label.run(.sequence([
+            .group([
+                .fadeIn(withDuration: 0.12),
+                .sequence([.scale(to: 1.1, duration: 0.14), .scale(to: 1.0, duration: 0.1)])
+            ]),
+            .wait(forDuration: 0.5),
+            .fadeOut(withDuration: 0.3),
+            .removeFromParent()
+        ]))
+    }
+
+    private func showLevelIntroBanner() {
+        let overlay = SKNode()
+        overlay.zPosition = 65
+        overlay.position = CGPoint(x: frame.midX, y: frame.height * 0.63)
+        addChild(overlay)
+
+        let panel = SKShapeNode(rectOf: CGSize(width: min(frame.width * 0.82, 320), height: 118), cornerRadius: 22)
+        panel.fillColor = UIColor(white: 0.08, alpha: 0.38)
+        panel.strokeColor = levelPresentation.isBossLevel
+            ? UIColor(red: 1.0, green: 0.78, blue: 0.36, alpha: 0.9)
+            : UIColor(white: 1.0, alpha: 0.28)
+        panel.lineWidth = 2
+        overlay.addChild(panel)
+
+        let chapterLabel = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
+        chapterLabel.text = levelPresentation.chapterTitle
+        chapterLabel.fontSize = 14
+        chapterLabel.fontColor = UIColor(white: 0.92, alpha: 1)
+        chapterLabel.position = CGPoint(x: 0, y: 28)
+        panel.addChild(chapterLabel)
+
+        let operationLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        operationLabel.text = levelPresentation.operationTitle
+        operationLabel.fontSize = 28
+        operationLabel.fontColor = levelPresentation.isBossLevel
+            ? UIColor(red: 1.0, green: 0.84, blue: 0.36, alpha: 1)
+            : .white
+        operationLabel.position = CGPoint(x: 0, y: -2)
+        panel.addChild(operationLabel)
+
+        let briefingLabel = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
+        briefingLabel.text = levelPresentation.briefing
+        briefingLabel.fontSize = 12
+        briefingLabel.fontColor = UIColor(white: 0.9, alpha: 1)
+        briefingLabel.position = CGPoint(x: 0, y: -28)
+        panel.addChild(briefingLabel)
+
+        let tagLabel = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
+        tagLabel.text = levelPresentation.isBossLevel ? "BOSS · \(challengePlan.shortTitle)" : Levels.levelBadge(for: currentLevel)
+        tagLabel.fontSize = 12
+        tagLabel.fontColor = palette.accent
+        tagLabel.position = CGPoint(x: 0, y: -48)
+        panel.addChild(tagLabel)
+
+        overlay.alpha = 0
+        overlay.setScale(0.92)
+        overlay.run(.sequence([
+            .group([.fadeIn(withDuration: 0.18), .scale(to: 1.0, duration: 0.18)]),
+            .wait(forDuration: 1.2),
+            .group([.fadeOut(withDuration: 0.3), .scale(to: 1.04, duration: 0.3)]),
+            .removeFromParent()
+        ]))
+    }
+
+    private func resultTitle(success: Bool) -> String {
+        if levelPresentation.isBossLevel {
+            return success ? "堡垒攻破" : "攻坚失败"
+        }
+        return success ? "通关成功" : "挑战失败"
+    }
+
     private func combinedHintText() -> String {
         let baseHint = levelConfig.hint ?? ""
         let challengeHint = "挑战：\(challengePlan.detail)"
+        let overdriveHint = "清块可蓄满王牌技。"
+        let phaseHint = currentLevel >= 7 ? "尾段会进入终局狂潮。" : ""
         let environmentHints = [motionHintText(), windHintText() ?? ""]
-        return ([baseHint, challengeHint] + environmentHints)
+        return ([baseHint, challengeHint, overdriveHint, phaseHint] + environmentHints)
             .filter { !$0.isEmpty }
             .joined(separator: "  ")
     }
@@ -797,16 +1067,18 @@ final class GameScene: SKScene {
     }
 
     private func currentWindAdjustment(at currentTime: TimeInterval) -> CGFloat {
+        let baseAdjustment: CGFloat
         switch windStyle {
         case .none:
-            return 0
+            baseAdjustment = 0
         case .tailwind:
-            return 0.015
+            baseAdjustment = 0.015
         case .headwind:
-            return -0.015
+            baseAdjustment = -0.015
         case .gust:
-            return CGFloat(sin(currentTime * 1.35)) * 0.024
+            baseAdjustment = CGFloat(sin(currentTime * 1.35)) * 0.024
         }
+        return baseAdjustment * windIntensityMultiplier
     }
 
     private func updateWindDisplay(currentTime: TimeInterval) {
@@ -819,6 +1091,70 @@ final class GameScene: SKScene {
         } else {
             windLabel.fontColor = secondaryTextColor
         }
+    }
+
+    private func updatePhaseDisplay() {
+        guard let phaseLabel else { return }
+        if finalAssaultTriggered {
+            phaseLabel.text = levelPresentation.isBossLevel ? "Boss 狂潮" : "终局狂潮"
+            phaseLabel.fontColor = UIColor(red: 1.0, green: 0.78, blue: 0.36, alpha: 1)
+            phaseLabel.alpha = 1
+        } else if levelPresentation.isBossLevel {
+            phaseLabel.text = "Boss 节点"
+            phaseLabel.fontColor = UIColor(red: 1.0, green: 0.84, blue: 0.36, alpha: 1)
+            phaseLabel.alpha = 1
+        } else {
+            phaseLabel.text = nil
+            phaseLabel.alpha = 0
+        }
+    }
+
+    private func maybeTriggerFinalAssault() {
+        guard !finalAssaultTriggered, !hasPresentedResult else { return }
+        guard currentLevel >= 7 else { return }
+
+        let activeBlocks = iceBlocks.filter { !$0.isBreaking && $0.parent != nil }
+        let threshold = levelPresentation.isBossLevel ? 4 : currentLevel >= 12 ? 3 : 2
+        guard activeBlocks.count <= threshold, !activeBlocks.isEmpty else { return }
+
+        finalAssaultTriggered = true
+        windIntensityMultiplier = levelPresentation.isBossLevel ? 1.65 : 1.3
+        let speedMultiplier: CGFloat = levelPresentation.isBossLevel ? 1.4 : 1.22
+        for block in activeBlocks {
+            block.speed = speedMultiplier
+        }
+
+        if !overdriveReady && !activePenguinOverdrive {
+            overdriveCharge = min(OverdriveConfig.maxCharge, overdriveCharge + 36)
+            if overdriveCharge >= OverdriveConfig.maxCharge {
+                overdriveReady = true
+                prepareLoadedPenguinForOverdriveIfNeeded()
+            }
+            updateOverdriveDisplay()
+        }
+
+        updatePhaseDisplay()
+        let title = levelPresentation.isBossLevel ? "Boss 狂潮" : "终局狂潮"
+        let detail = levelPresentation.isBossLevel ? "风压与移动速度提升" : "战场开始升温"
+        showAnnouncement(
+            text: title,
+            color: UIColor(red: 1.0, green: 0.80, blue: 0.34, alpha: 1),
+            position: CGPoint(x: frame.midX, y: frame.midY + 98)
+        )
+        let subLabel = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
+        subLabel.text = detail
+        subLabel.fontSize = 14
+        subLabel.fontColor = UIColor(white: 0.96, alpha: 1)
+        subLabel.position = CGPoint(x: frame.midX, y: frame.midY + 70)
+        subLabel.zPosition = 69
+        subLabel.alpha = 0
+        addChild(subLabel)
+        subLabel.run(.sequence([
+            .fadeIn(withDuration: 0.14),
+            .wait(forDuration: 0.7),
+            .fadeOut(withDuration: 0.28),
+            .removeFromParent()
+        ]))
     }
 
     private func isChallengeComplete(onSuccess success: Bool) -> Bool {
@@ -1032,8 +1368,13 @@ final class GameScene: SKScene {
         let dx = anchorPos.x - penguin.position.x
         let dy = anchorPos.y - penguin.position.y
 
+        let isOverdriveTrajectory = overdriveReady
         var speed = sqrt(dx * dx + dy * dy) * GamePhysics.launchSpeedMultiplier
-        speed = min(speed, GamePhysics.maxLaunchSpeed)
+        if isOverdriveTrajectory {
+            speed *= OverdriveConfig.speedMultiplier
+        }
+        let maxSpeed = GamePhysics.maxLaunchSpeed * (isOverdriveTrajectory ? OverdriveConfig.speedMultiplier : 1)
+        speed = min(speed, maxSpeed)
 
         let angle = atan2(dy, dx)
         var velocityX = cos(angle) * speed
@@ -1043,6 +1384,9 @@ final class GameScene: SKScene {
 
         let path = CGMutablePath()
         path.move(to: CGPoint(x: x, y: y))
+        trajectoryLine.strokeColor = isOverdriveTrajectory
+            ? UIColor(red: 1.0, green: 0.84, blue: 0.32, alpha: 0.78)
+            : UIColor.gray.withAlphaComponent(0.45)
 
         let previewStartTime = lastUpdateTime > 0 ? lastUpdateTime : CACurrentMediaTime()
         for step in 0..<16 {
@@ -1067,8 +1411,13 @@ final class GameScene: SKScene {
         let dx = anchorPos.x - penguin.position.x
         let dy = anchorPos.y - penguin.position.y
 
+        let isOverdriveLaunch = overdriveReady
         var speed = sqrt(dx * dx + dy * dy) * GamePhysics.launchSpeedMultiplier
-        speed = min(speed, GamePhysics.maxLaunchSpeed)
+        if isOverdriveLaunch {
+            speed *= OverdriveConfig.speedMultiplier
+        }
+        let maxSpeed = GamePhysics.maxLaunchSpeed * (isOverdriveLaunch ? OverdriveConfig.speedMultiplier : 1)
+        speed = min(speed, maxSpeed)
 
         let angle = atan2(dy, dx)
         let velocityX = cos(angle) * speed
@@ -1088,6 +1437,7 @@ final class GameScene: SKScene {
         activePenguin = penguin
         penguinNode = nil
         flightState = .flying
+        activateOverdriveIfNeeded(at: penguin.position)
         roundComboCount = 0
         launchTime = CACurrentMediaTime()
         shotsFired += 1
@@ -1203,6 +1553,8 @@ final class GameScene: SKScene {
         activePenguin?.physicsBody = nil
         activePenguin?.removeFromParent()
         activePenguin = nil
+        activePenguinOverdrive = false
+        overdriveShockwavesRemaining = 0
         flightState = .stopped
         onPenguinStopped()
     }
@@ -1236,7 +1588,10 @@ final class GameScene: SKScene {
 
             lastBlockHitTimes[identifier] = timestamp
 
-            let damage = max(1, Int(penguinSpeed / 4.2))
+            let baseDamage = max(1, Int(penguinSpeed / 4.2))
+            let damage = activePenguinOverdrive
+                ? max(baseDamage + 1, Int(ceil(Double(baseDamage) * OverdriveConfig.damageMultiplier)))
+                : baseDamage
             let destroyed = block.takeDamage(damage)
             bouncePenguinAway(from: block, speed: penguinSpeed)
 
@@ -1262,7 +1617,8 @@ final class GameScene: SKScene {
             normal = CGVector(dx: 1, dy: 1)
         }
 
-        let newSpeed = max(4, speed * GamePhysics.bounceDecay)
+        let retention = activePenguinOverdrive ? OverdriveConfig.bounceRetention : GamePhysics.bounceDecay
+        let newSpeed = max(4, speed * retention)
         body.velocity = CGVector(dx: normal.dx * newSpeed, dy: normal.dy * newSpeed)
     }
 
@@ -1276,11 +1632,18 @@ final class GameScene: SKScene {
         if isExplosiveBlock {
             explosiveBlocksDestroyedCount += 1
         }
+        addOverdriveCharge(for: block.blockType)
         updateChallengeDisplay()
+        maybeTriggerFinalAssault()
 
         addScoreForBlock(block)
         AudioManager.shared.playIceBreakSound()
         ParticleEffects.shared.playExplosion(at: blockPosition, in: self)
+
+        if activePenguinOverdrive && overdriveShockwavesRemaining > 0 {
+            overdriveShockwavesRemaining -= 1
+            triggerOverdriveShockwave(at: blockPosition, excluding: block)
+        }
 
         if roundComboCount >= 2 {
             showComboEffect(count: roundComboCount, at: blockPosition)
@@ -1291,6 +1654,7 @@ final class GameScene: SKScene {
         let blockRef = block
         block.playBreakAnimation { [weak self] in
             self?.iceBlocks.removeAll { $0 === blockRef }
+            self?.maybeTriggerFinalAssault()
             self?.checkLevelComplete()
         }
 
@@ -1412,6 +1776,7 @@ final class GameScene: SKScene {
         trailEmitter = nil
         bestShotDestroyedCount = max(bestShotDestroyedCount, roundComboCount)
         updateChallengeDisplay()
+        maybeTriggerFinalAssault()
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
             self?.checkLevelComplete()
@@ -1510,7 +1875,7 @@ final class GameScene: SKScene {
         overlay.addChild(panel)
 
         let titleLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
-        titleLabel.text = success ? "通关成功" : "挑战失败"
+        titleLabel.text = resultTitle(success: success)
         titleLabel.fontSize = 32
         titleLabel.fontColor = .white
         titleLabel.position = CGPoint(x: 0, y: 108)
@@ -1526,7 +1891,12 @@ final class GameScene: SKScene {
         panel.addChild(resultScoreLabel)
 
         let targetSummary = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
-        targetSummary.text = "目标 \(scorePlan.targetScore) · 用时 \(shotsFired) 发"
+        let missionPrefix = levelPresentation.isBossLevel
+            ? "\(levelPresentation.operationTitle) · Boss"
+            : levelPresentation.operationTitle
+        targetSummary.text = overdriveActivations > 0
+            ? "\(missionPrefix) · 目标 \(scorePlan.targetScore) · \(shotsFired) 发 · 爆发 \(overdriveActivations) 次"
+            : "\(missionPrefix) · 目标 \(scorePlan.targetScore) · \(shotsFired) 发"
         targetSummary.fontSize = 15
         targetSummary.fontColor = UIColor(white: 0.92, alpha: 1)
         targetSummary.position = CGPoint(x: 0, y: 26)
@@ -1663,6 +2033,8 @@ final class GameScene: SKScene {
         activePenguin?.physicsBody = nil
         activePenguin?.removeFromParent()
         activePenguin = nil
+        activePenguinOverdrive = false
+        overdriveShockwavesRemaining = 0
         penguinNode?.removeAllActions()
         penguinNode?.removeFromParent()
         penguinNode = nil

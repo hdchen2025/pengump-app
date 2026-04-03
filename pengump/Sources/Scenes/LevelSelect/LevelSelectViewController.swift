@@ -96,7 +96,14 @@ final class LevelSelectViewController: UIViewController {
         let totalStars = (1...totalLevels).reduce(0) { $0 + SaveManager.shared.stars(for: $1) }
         let totalMedals = SaveManager.shared.completedChallengeCount
         let unlocked = min(SaveManager.shared.unlockedLevels, totalLevels)
-        summaryLabel.text = "已解锁 \(unlocked)/\(totalLevels) 关  ·  已获得 \(totalStars) 颗星\n精英勋章 \(totalMedals)/\(totalLevels)"
+        let spotlight = Levels.presentation(for: unlocked)
+        let spotlightPrefix = spotlight.isBossLevel ? "BOSS 战区" : "当前战区"
+        summaryLabel.text = """
+        已解锁 \(unlocked)/\(totalLevels) 关  ·  已获得 \(totalStars) 颗星
+        精英勋章 \(totalMedals)/\(totalLevels)
+        \(spotlightPrefix) \(spotlight.chapterTitle) · \(spotlight.operationTitle)
+        作战简报：\(spotlight.briefing)
+        """
     }
 
     @objc private func backTapped() {
@@ -139,11 +146,14 @@ extension LevelSelectViewController: UICollectionViewDataSource {
         let isUnlocked = SaveManager.shared.isLevelUnlocked(level)
         let stars = SaveManager.shared.stars(for: level)
         let isCurrent = level == min(SaveManager.shared.unlockedLevels, totalLevels)
+        let presentation = Levels.presentation(for: level)
         cell.configure(
             levelNumber: level,
             isUnlocked: isUnlocked,
             stars: stars,
             isCurrent: isCurrent,
+            operationTitle: presentation.operationTitle,
+            isBossLevel: presentation.isBossLevel,
             badgeText: Levels.levelBadge(for: level),
             hasMedal: SaveManager.shared.isChallengeCompleted(level)
         )
@@ -163,7 +173,7 @@ extension LevelSelectViewController: UICollectionViewDelegateFlowLayout {
         let spacing: CGFloat = 28
         let availableWidth = collectionView.bounds.width - horizontalPadding - spacing
         let cellWidth = floor(availableWidth / 3)
-        return CGSize(width: max(cellWidth, 80), height: 108)
+        return CGSize(width: max(cellWidth, 80), height: 116)
     }
 }
 
@@ -263,10 +273,10 @@ final class LevelCell: UICollectionViewCell {
         ])
     }
 
-    func configure(levelNumber: Int, isUnlocked: Bool, stars: Int, isCurrent: Bool, badgeText: String, hasMedal: Bool) {
+    func configure(levelNumber: Int, isUnlocked: Bool, stars: Int, isCurrent: Bool, operationTitle: String, isBossLevel: Bool, badgeText: String, hasMedal: Bool) {
         numberLabel.text = "\(levelNumber)"
         subtitleLabel.text = isUnlocked
-            ? (isCurrent ? "当前进度\n\(badgeText)" : badgeText)
+            ? "\(operationTitle)\n\(isCurrent ? "当前进度" : badgeText)"
             : ""
 
         if isUnlocked {
@@ -274,7 +284,16 @@ final class LevelCell: UICollectionViewCell {
             numberLabel.isHidden = false
             starLabel.isHidden = false
             subtitleLabel.isHidden = false
-            medalLabel.isHidden = !hasMedal
+            medalLabel.isHidden = !(hasMedal || isBossLevel)
+            if hasMedal {
+                medalLabel.text = "精英"
+                medalLabel.textColor = UIColor(red: 0.54, green: 0.31, blue: 0.02, alpha: 1.0)
+                medalLabel.backgroundColor = UIColor(red: 1.0, green: 0.89, blue: 0.49, alpha: 0.96)
+            } else if isBossLevel {
+                medalLabel.text = "Boss"
+                medalLabel.textColor = .white
+                medalLabel.backgroundColor = UIColor(red: 0.86, green: 0.33, blue: 0.24, alpha: 0.96)
+            }
 
             if stars > 0 {
                 starLabel.text = String(repeating: "⭐", count: stars)
@@ -286,12 +305,24 @@ final class LevelCell: UICollectionViewCell {
                 starLabel.font = .systemFont(ofSize: 12, weight: .medium)
             }
 
+            if isBossLevel {
+                contentView.layer.borderColor = UIColor(red: 1.0, green: 0.82, blue: 0.34, alpha: 1.0).cgColor
+                contentView.layer.shadowColor = UIColor(red: 0.62, green: 0.28, blue: 0.16, alpha: 1.0).cgColor
+            } else {
+                contentView.layer.borderColor = UIColor.white.cgColor
+                contentView.layer.shadowColor = UIColor(red: 0.12, green: 0.31, blue: 0.58, alpha: 1.0).cgColor
+            }
+
             if isCurrent {
                 contentView.backgroundColor = UIColor(red: 0.15, green: 0.61, blue: 0.74, alpha: 1.0)
             } else if stars > 0 {
-                contentView.backgroundColor = UIColor(red: 0.2, green: 0.5, blue: 0.9, alpha: 1.0)
+                contentView.backgroundColor = isBossLevel
+                    ? UIColor(red: 0.58, green: 0.34, blue: 0.78, alpha: 1.0)
+                    : UIColor(red: 0.2, green: 0.5, blue: 0.9, alpha: 1.0)
             } else {
-                contentView.backgroundColor = UIColor(red: 0.28, green: 0.72, blue: 0.45, alpha: 1.0)
+                contentView.backgroundColor = isBossLevel
+                    ? UIColor(red: 0.75, green: 0.42, blue: 0.24, alpha: 1.0)
+                    : UIColor(red: 0.28, green: 0.72, blue: 0.45, alpha: 1.0)
             }
         } else {
             lockOverlay.isHidden = false
@@ -299,6 +330,8 @@ final class LevelCell: UICollectionViewCell {
             starLabel.isHidden = true
             subtitleLabel.isHidden = true
             medalLabel.isHidden = true
+            contentView.layer.borderColor = UIColor.white.cgColor
+            contentView.layer.shadowColor = UIColor(red: 0.12, green: 0.31, blue: 0.58, alpha: 1.0).cgColor
             contentView.backgroundColor = UIColor(white: 0.55, alpha: 1.0)
         }
     }
