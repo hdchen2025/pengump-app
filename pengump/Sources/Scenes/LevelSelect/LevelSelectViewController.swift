@@ -95,12 +95,16 @@ final class LevelSelectViewController: UIViewController {
     private func refreshSummary() {
         let totalStars = (1...totalLevels).reduce(0) { $0 + SaveManager.shared.stars(for: $1) }
         let totalMedals = SaveManager.shared.completedChallengeCount
+        let dominance = SaveManager.shared.campaignDominancePercent
+        let sRanks = SaveManager.shared.rankCount(.s)
+        let rankedLevels = SaveManager.shared.rankedLevelCount
         let unlocked = min(SaveManager.shared.unlockedLevels, totalLevels)
         let spotlight = Levels.presentation(for: unlocked)
         let spotlightPrefix = spotlight.isBossLevel ? "BOSS 战区" : "当前战区"
         summaryLabel.text = """
         已解锁 \(unlocked)/\(totalLevels) 关  ·  已获得 \(totalStars) 颗星
-        精英勋章 \(totalMedals)/\(totalLevels)
+        精英勋章 \(totalMedals)/\(totalLevels) · S 评级 \(sRanks) 关 · 已评级 \(rankedLevels) 关
+        战役统治值 \(dominance)% · 战役强度 \(SaveManager.shared.campaignPower)
         \(spotlightPrefix) \(spotlight.chapterTitle) · \(spotlight.operationTitle)
         作战简报：\(spotlight.briefing)
         """
@@ -154,8 +158,9 @@ extension LevelSelectViewController: UICollectionViewDataSource {
             isCurrent: isCurrent,
             operationTitle: presentation.operationTitle,
             isBossLevel: presentation.isBossLevel,
-            badgeText: Levels.levelBadge(for: level),
-            hasMedal: SaveManager.shared.isChallengeCompleted(level)
+            badgeText: Levels.operationBadge(for: level),
+            hasMedal: SaveManager.shared.isChallengeCompleted(level),
+            rank: SaveManager.shared.bestRank(for: level)
         )
         return cell
     }
@@ -182,6 +187,7 @@ final class LevelCell: UICollectionViewCell {
     private let numberLabel = UILabel()
     private let starLabel = UILabel()
     private let subtitleLabel = UILabel()
+    private let rankLabel = UILabel()
     private let medalLabel = UILabel()
     private let lockOverlay = UIView()
     private let lockIcon = UILabel()
@@ -219,6 +225,14 @@ final class LevelCell: UICollectionViewCell {
         subtitleLabel.textColor = UIColor.white.withAlphaComponent(0.8)
         subtitleLabel.numberOfLines = 2
 
+        rankLabel.translatesAutoresizingMaskIntoConstraints = false
+        rankLabel.font = .systemFont(ofSize: 11, weight: .bold)
+        rankLabel.textAlignment = .center
+        rankLabel.textColor = .white
+        rankLabel.layer.cornerRadius = 9
+        rankLabel.layer.masksToBounds = true
+        rankLabel.isHidden = true
+
         medalLabel.translatesAutoresizingMaskIntoConstraints = false
         medalLabel.font = .systemFont(ofSize: 10, weight: .bold)
         medalLabel.textAlignment = .center
@@ -242,11 +256,17 @@ final class LevelCell: UICollectionViewCell {
         contentView.addSubview(numberLabel)
         contentView.addSubview(starLabel)
         contentView.addSubview(subtitleLabel)
+        contentView.addSubview(rankLabel)
         contentView.addSubview(medalLabel)
         contentView.addSubview(lockOverlay)
         lockOverlay.addSubview(lockIcon)
 
         NSLayoutConstraint.activate([
+            rankLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 10),
+            rankLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 10),
+            rankLabel.widthAnchor.constraint(equalToConstant: 30),
+            rankLabel.heightAnchor.constraint(equalToConstant: 18),
+
             medalLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 10),
             medalLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -10),
             medalLabel.widthAnchor.constraint(equalToConstant: 34),
@@ -273,7 +293,7 @@ final class LevelCell: UICollectionViewCell {
         ])
     }
 
-    func configure(levelNumber: Int, isUnlocked: Bool, stars: Int, isCurrent: Bool, operationTitle: String, isBossLevel: Bool, badgeText: String, hasMedal: Bool) {
+    func configure(levelNumber: Int, isUnlocked: Bool, stars: Int, isCurrent: Bool, operationTitle: String, isBossLevel: Bool, badgeText: String, hasMedal: Bool, rank: OperationRank?) {
         numberLabel.text = "\(levelNumber)"
         subtitleLabel.text = isUnlocked
             ? "\(operationTitle)\n\(isCurrent ? "当前进度" : badgeText)"
@@ -284,6 +304,9 @@ final class LevelCell: UICollectionViewCell {
             numberLabel.isHidden = false
             starLabel.isHidden = false
             subtitleLabel.isHidden = false
+            rankLabel.isHidden = rank == nil
+            rankLabel.text = rank?.displayText
+            rankLabel.backgroundColor = rank.map { $0.accentColor.withAlphaComponent(0.96) }
             medalLabel.isHidden = !(hasMedal || isBossLevel)
             if hasMedal {
                 medalLabel.text = "精英"
@@ -329,6 +352,7 @@ final class LevelCell: UICollectionViewCell {
             numberLabel.isHidden = true
             starLabel.isHidden = true
             subtitleLabel.isHidden = true
+            rankLabel.isHidden = true
             medalLabel.isHidden = true
             contentView.layer.borderColor = UIColor.white.cgColor
             contentView.layer.shadowColor = UIColor(red: 0.12, green: 0.31, blue: 0.58, alpha: 1.0).cgColor

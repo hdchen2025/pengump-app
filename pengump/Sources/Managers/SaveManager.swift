@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 // MARK: - 数据结构
 
@@ -9,13 +10,66 @@ struct ScoreRecord: Codable, Equatable {
     let date: Date
 }
 
+enum OperationRank: Int, Codable, CaseIterable {
+    case d = 0
+    case c = 1
+    case b = 2
+    case a = 3
+    case s = 4
+
+    var displayText: String {
+        switch self {
+        case .d:
+            return "D"
+        case .c:
+            return "C"
+        case .b:
+            return "B"
+        case .a:
+            return "A"
+        case .s:
+            return "S"
+        }
+    }
+
+    var powerValue: Int {
+        switch self {
+        case .d:
+            return 0
+        case .c:
+            return 80
+        case .b:
+            return 140
+        case .a:
+            return 220
+        case .s:
+            return 320
+        }
+    }
+
+    var accentColor: UIColor {
+        switch self {
+        case .d:
+            return UIColor(white: 0.70, alpha: 1.0)
+        case .c:
+            return UIColor(red: 0.54, green: 0.77, blue: 1.0, alpha: 1.0)
+        case .b:
+            return UIColor(red: 0.37, green: 0.86, blue: 0.56, alpha: 1.0)
+        case .a:
+            return UIColor(red: 1.0, green: 0.84, blue: 0.38, alpha: 1.0)
+        case .s:
+            return UIColor(red: 1.0, green: 0.53, blue: 0.30, alpha: 1.0)
+        }
+    }
+}
+
 // MARK: - SaveManager
 
 class SaveManager {
     static let shared = SaveManager()
 
     private let defaults = UserDefaults.standard
-    private let currentSaveDataVersion = 3
+    private let currentSaveDataVersion = 4
     private let maxStaminaValue = 30
 
     // UserDefaults keys
@@ -28,6 +82,7 @@ class SaveManager {
         static let lastStaminaUpdate = "last_stamina_update"
         static let hasRecord = "has_record"
         static let completedChallenges = "completed_challenges"
+        static let bestRanks = "best_ranks"
     }
 
     // MARK: - 数据属性
@@ -35,6 +90,7 @@ class SaveManager {
     var highestScores: [Int: ScoreRecord] = [:]  // 每关最高分
     var unlockedLevels: Int = 1                   // 已解锁最高关卡
     var completedChallenges: Set<Int> = []
+    var bestRanks: [Int: Int] = [:]
 
     // 兼容旧经济字段（免费版主流程不依赖）
     var coins: Int = 0
@@ -67,6 +123,13 @@ class SaveManager {
             completedChallenges = Set(completed)
         } else {
             completedChallenges = []
+        }
+
+        if let data = defaults.data(forKey: Keys.bestRanks),
+           let ranks = try? JSONDecoder().decode([Int: Int].self, from: data) {
+            bestRanks = ranks
+        } else {
+            bestRanks = [:]
         }
 
         // 兼容读取旧经济字段（但不驱动免费版主流程）
@@ -107,6 +170,9 @@ class SaveManager {
 
         defaults.set(unlockedLevels, forKey: Keys.unlockedLevels)
         defaults.set(Array(completedChallenges).sorted(), forKey: Keys.completedChallenges)
+        if let data = try? JSONEncoder().encode(bestRanks) {
+            defaults.set(data, forKey: Keys.bestRanks)
+        }
 
         // 兼容写回旧经济字段（免费版主流程不依赖）
         defaults.set(coins, forKey: Keys.coins)
@@ -132,6 +198,7 @@ class SaveManager {
             || defaults.object(forKey: Keys.highestScores) != nil
             || defaults.object(forKey: Keys.unlockedLevels) != nil
             || defaults.object(forKey: Keys.completedChallenges) != nil
+            || defaults.object(forKey: Keys.bestRanks) != nil
             || defaults.object(forKey: Keys.coins) != nil
             || defaults.object(forKey: Keys.stamina) != nil
             || defaults.object(forKey: Keys.lastStaminaUpdate) != nil
@@ -187,6 +254,54 @@ class SaveManager {
 
     var completedChallengeCount: Int {
         completedChallenges.count
+    }
+
+    func bestRank(for level: Int) -> OperationRank? {
+        guard let rawValue = bestRanks[level] else {
+            return nil
+        }
+        return OperationRank(rawValue: rawValue)
+    }
+
+    @discardableResult
+    func updateRank(level: Int, rank: OperationRank) -> Bool {
+        let currentRawValue = bestRanks[level] ?? 0
+        guard rank.rawValue > currentRawValue else {
+            return false
+        }
+
+        bestRanks[level] = rank.rawValue
+        save()
+        return true
+    }
+
+    func rankCount(_ rank: OperationRank) -> Int {
+        bestRanks.values.filter { $0 == rank.rawValue }.count
+    }
+
+    var campaignPower: Int {
+        let starPower = (1...Levels.totalLevels).reduce(0) { partialResult, level in
+            partialResult + stars(for: level) * 100
+        }
+        let medalPower = completedChallengeCount * 150
+        let rankPower = bestRanks.values.reduce(0) { partialResult, rawValue in
+            partialResult + (OperationRank(rawValue: rawValue)?.powerValue ?? 0)
+        }
+        return starPower + medalPower + rankPower
+    }
+
+    var rankedLevelCount: Int {
+        bestRanks.count
+    }
+
+    var campaignDominancePercent: Int {
+        let maxStarPower = Levels.totalLevels * 3 * 100
+        let maxMedalPower = Levels.totalLevels * 150
+        let maxRankPower = Levels.totalLevels * OperationRank.s.powerValue
+        let maxPower = maxStarPower + maxMedalPower + maxRankPower
+        guard maxPower > 0 else { return 0 }
+        let ratio = Double(campaignPower) / Double(maxPower)
+        return min(max(Int((ratio * 100).rounded()), 0), 100)
     }
 
     /// 检查关卡是否已解锁

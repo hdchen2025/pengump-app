@@ -18,7 +18,7 @@ final class MenuViewController: UIViewController {
     private lazy var subtitleLabel: UILabel = {
         let label = UILabel()
         label.translatesAutoresizingMaskIntoConstraints = false
-        label.text = "投送王牌企鹅，推进三章战役，冲击三星和精英勋章。"
+        label.text = "投送王牌企鹅，推进多阶段战役，冲击三星、精英勋章与 S 评级。"
         label.font = .systemFont(ofSize: 17, weight: .medium)
         label.textColor = UIColor(red: 0.30, green: 0.43, blue: 0.56, alpha: 1.0)
         label.textAlignment = .center
@@ -54,6 +54,8 @@ final class MenuViewController: UIViewController {
         label.translatesAutoresizingMaskIntoConstraints = false
         label.font = .systemFont(ofSize: 30, weight: .bold)
         label.textColor = UIColor(red: 0.11, green: 0.42, blue: 0.76, alpha: 1.0)
+        label.adjustsFontSizeToFitWidth = true
+        label.minimumScaleFactor = 0.72
         return label
     }()
 
@@ -193,14 +195,17 @@ final class MenuViewController: UIViewController {
         let totalStars = (1...Levels.totalLevels).reduce(0) { $0 + SaveManager.shared.stars(for: $1) }
         let bestScore = SaveManager.shared.topScores(limit: 1).first?.score ?? 0
         let medals = SaveManager.shared.completedChallengeCount
+        let sRanks = SaveManager.shared.rankCount(.s)
+        let dominance = SaveManager.shared.campaignDominancePercent
         let unlocked = SaveManager.shared.unlockedLevels
         let spotlightLevel = min(max(unlocked, 1), Levels.totalLevels)
         let presentation = Levels.presentation(for: spotlightLevel)
         let nextBattlePrefix = presentation.isBossLevel ? "下一战 BOSS" : "下一战"
 
-        progressValueLabel.text = "已解锁 \(min(unlocked, Levels.totalLevels))/\(Levels.totalLevels) 关"
+        progressValueLabel.text = "已解锁 \(min(unlocked, Levels.totalLevels))/\(Levels.totalLevels) 关 · 统治值 \(dominance)%"
         progressDetailLabel.text = """
-        星 \(totalStars) / \(Levels.totalLevels * 3) · 勋章 \(medals) / \(Levels.totalLevels) · 最高分 \(bestScore)
+        星 \(totalStars) / \(Levels.totalLevels * 3) · 勋章 \(medals) / \(Levels.totalLevels) · S 评级 \(sRanks) 关
+        战役强度 \(SaveManager.shared.campaignPower) · 最高分 \(bestScore)
         当前战区 \(presentation.chapterTitle) · \(nextBattlePrefix) \(presentation.operationTitle)
         """
     }

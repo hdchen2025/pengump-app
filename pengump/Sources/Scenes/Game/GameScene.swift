@@ -254,6 +254,7 @@ final class GameScene: SKScene {
     private let levelConfig: LevelConfig
     private let levelTheme: LevelTheme
     private let levelPresentation: LevelPresentation
+    private let encounterPlan: LevelEncounterPlan
     private let scorePlan: LevelScorePlan
     private let windStyle: LevelWindStyle
     private let challengePlan: LevelChallengePlan
@@ -269,6 +270,10 @@ final class GameScene: SKScene {
     private var overdriveShockwavesRemaining = 0
     private var overdriveActivations = 0
     private var finalAssaultTriggered = false
+    private var currentPhaseIndex = 1
+    private var pendingReinforcementWaves: [ReinforcementWave]
+    private var isDeployingReinforcementWave = false
+    private var spawnedBlockCount = 0
     private var windIntensityMultiplier: CGFloat = 1
     private var flightState: PenguinFlightState = .ready
     private var launchTime: TimeInterval = 0
@@ -309,9 +314,11 @@ final class GameScene: SKScene {
         levelConfig = Levels.config(for: level)
         levelTheme = Levels.theme(for: level)
         levelPresentation = Levels.presentation(for: level)
-        scorePlan = Levels.scorePlan(for: levelConfig)
+        encounterPlan = Levels.encounter(for: level)
+        scorePlan = Levels.scorePlan(for: level)
         windStyle = Levels.windStyle(for: level)
         challengePlan = Levels.challengePlan(for: level)
+        pendingReinforcementWaves = encounterPlan.reinforcementWaves
         penguinsRemaining = levelConfig.penguinCount
         super.init(size: .zero)
         backgroundColor = palette.sky
@@ -920,7 +927,7 @@ final class GameScene: SKScene {
         }
     }
 
-    private func showAnnouncement(text: String, color: UIColor, position: CGPoint? = nil) {
+    private func showAnnouncement(text: String, subtitle: String? = nil, color: UIColor, position: CGPoint? = nil) {
         let label = SKLabelNode(fontNamed: "AvenirNext-Bold")
         label.text = text
         label.fontSize = 24
@@ -938,6 +945,22 @@ final class GameScene: SKScene {
             ]),
             .wait(forDuration: 0.5),
             .fadeOut(withDuration: 0.3),
+            .removeFromParent()
+        ]))
+
+        guard let subtitle else { return }
+        let subLabel = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
+        subLabel.text = subtitle
+        subLabel.fontSize = 14
+        subLabel.fontColor = UIColor(white: 0.96, alpha: 1)
+        subLabel.position = CGPoint(x: label.position.x, y: label.position.y - 28)
+        subLabel.zPosition = label.zPosition - 1
+        subLabel.alpha = 0
+        addChild(subLabel)
+        subLabel.run(.sequence([
+            .fadeIn(withDuration: 0.14),
+            .wait(forDuration: 0.7),
+            .fadeOut(withDuration: 0.28),
             .removeFromParent()
         ]))
     }
@@ -980,7 +1003,7 @@ final class GameScene: SKScene {
         panel.addChild(briefingLabel)
 
         let tagLabel = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
-        tagLabel.text = levelPresentation.isBossLevel ? "BOSS · \(challengePlan.shortTitle)" : Levels.levelBadge(for: currentLevel)
+        tagLabel.text = levelPresentation.isBossLevel ? "BOSS · \(Levels.operationBadge(for: currentLevel))" : Levels.operationBadge(for: currentLevel)
         tagLabel.fontSize = 12
         tagLabel.fontColor = palette.accent
         tagLabel.position = CGPoint(x: 0, y: -48)
@@ -1008,23 +1031,31 @@ final class GameScene: SKScene {
         let challengeHint = "挑战：\(challengePlan.detail)"
         let overdriveHint = "清块可蓄满王牌技。"
         let phaseHint = currentLevel >= 7 ? "尾段会进入终局狂潮。" : ""
+        let encounterHint = encounterPlan.totalPhaseCount > 1 ? "本关包含 \(encounterPlan.totalPhaseCount) 阶段攻坚。" : ""
         let environmentHints = [motionHintText(), windHintText() ?? ""]
-        return ([baseHint, challengeHint, overdriveHint, phaseHint] + environmentHints)
+        return ([baseHint, challengeHint, overdriveHint, phaseHint, encounterHint] + environmentHints)
             .filter { !$0.isEmpty }
             .joined(separator: "  ")
     }
 
     private func ruleText() -> String? {
+        var tags: [String] = []
         switch Levels.motionStyle(for: currentLevel) {
         case .none:
-            return nil
+            break
         case .glide:
-            return "移动靶"
+            tags.append("移动靶")
         case .hover:
-            return "悬浮靶"
+            tags.append("悬浮靶")
         case .weave:
-            return "变轨靶"
+            tags.append("变轨靶")
         }
+
+        if encounterPlan.totalPhaseCount > 1 {
+            tags.append("\(encounterPlan.totalPhaseCount)阶段")
+        }
+
+        return tags.isEmpty ? nil : tags.joined(separator: " · ")
     }
 
     private func motionHintText() -> String {
@@ -1095,9 +1126,23 @@ final class GameScene: SKScene {
 
     private func updatePhaseDisplay() {
         guard let phaseLabel else { return }
-        if finalAssaultTriggered {
-            phaseLabel.text = levelPresentation.isBossLevel ? "Boss 狂潮" : "终局狂潮"
+        if isDeployingReinforcementWave {
+            phaseLabel.text = "增援空投 · \(currentPhaseIndex)/\(encounterPlan.totalPhaseCount)"
+            phaseLabel.fontColor = palette.accent
+            phaseLabel.alpha = 1
+        } else if finalAssaultTriggered {
+            let prefix = levelPresentation.isBossLevel ? "Boss 狂潮" : "终局狂潮"
+            phaseLabel.text = encounterPlan.totalPhaseCount > 1
+                ? "\(prefix) · \(currentPhaseIndex)/\(encounterPlan.totalPhaseCount)"
+                : prefix
             phaseLabel.fontColor = UIColor(red: 1.0, green: 0.78, blue: 0.36, alpha: 1)
+            phaseLabel.alpha = 1
+        } else if encounterPlan.totalPhaseCount > 1 {
+            let prefix = levelPresentation.isBossLevel ? "Boss 阶段" : "阶段"
+            phaseLabel.text = "\(prefix) \(currentPhaseIndex)/\(encounterPlan.totalPhaseCount)"
+            phaseLabel.fontColor = levelPresentation.isBossLevel
+                ? UIColor(red: 1.0, green: 0.84, blue: 0.36, alpha: 1)
+                : palette.accent
             phaseLabel.alpha = 1
         } else if levelPresentation.isBossLevel {
             phaseLabel.text = "Boss 节点"
@@ -1109,11 +1154,59 @@ final class GameScene: SKScene {
         }
     }
 
+    @discardableResult
+    private func maybeDeployReinforcementWave() -> Bool {
+        guard !isDeployingReinforcementWave, !hasPresentedResult, activePenguin == nil else { return false }
+        guard let nextWave = pendingReinforcementWaves.first else { return false }
+        guard activeBlocks().count <= nextWave.triggerRemainingBlocks else { return false }
+
+        isDeployingReinforcementWave = true
+        pendingReinforcementWaves.removeFirst()
+        currentPhaseIndex = min(currentPhaseIndex + 1, encounterPlan.totalPhaseCount)
+        windIntensityMultiplier = max(
+            windIntensityMultiplier,
+            levelPresentation.isBossLevel ? 1.18 : (windStyle == .none ? 1.05 : 1.12)
+        )
+        updatePhaseDisplay()
+        showAnnouncement(
+            text: nextWave.title,
+            subtitle: nextWave.detail,
+            color: levelPresentation.isBossLevel ? UIColor(red: 1.0, green: 0.82, blue: 0.34, alpha: 1) : palette.accent,
+            position: CGPoint(x: frame.midX, y: frame.midY + 92)
+        )
+
+        let startDelay = 0.16
+        let stepDelay = 0.1
+        for (index, config) in nextWave.blockConfigs.enumerated() {
+            let delay = startDelay + stepDelay * Double(index)
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, !self.hasPresentedResult else { return }
+                self.spawnBlock(from: config, animated: true)
+                ParticleEffects.shared.playStarBurst(
+                    at: CGPoint(x: self.frame.width * config.x, y: self.frame.height * config.y),
+                    in: self
+                )
+                AudioManager.shared.playIceHitSound()
+            }
+        }
+
+        let finishDelay = startDelay + stepDelay * Double(nextWave.blockConfigs.count) + 0.18
+        DispatchQueue.main.asyncAfter(deadline: .now() + finishDelay) { [weak self] in
+            guard let self, !self.hasPresentedResult else { return }
+            self.isDeployingReinforcementWave = false
+            self.updatePhaseDisplay()
+            self.maybeTriggerFinalAssault()
+            self.checkLevelComplete()
+        }
+        return true
+    }
+
     private func maybeTriggerFinalAssault() {
         guard !finalAssaultTriggered, !hasPresentedResult else { return }
         guard currentLevel >= 7 else { return }
+        guard pendingReinforcementWaves.isEmpty, !isDeployingReinforcementWave else { return }
 
-        let activeBlocks = iceBlocks.filter { !$0.isBreaking && $0.parent != nil }
+        let activeBlocks = activeBlocks()
         let threshold = levelPresentation.isBossLevel ? 4 : currentLevel >= 12 ? 3 : 2
         guard activeBlocks.count <= threshold, !activeBlocks.isEmpty else { return }
 
@@ -1138,23 +1231,10 @@ final class GameScene: SKScene {
         let detail = levelPresentation.isBossLevel ? "风压与移动速度提升" : "战场开始升温"
         showAnnouncement(
             text: title,
+            subtitle: detail,
             color: UIColor(red: 1.0, green: 0.80, blue: 0.34, alpha: 1),
             position: CGPoint(x: frame.midX, y: frame.midY + 98)
         )
-        let subLabel = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
-        subLabel.text = detail
-        subLabel.fontSize = 14
-        subLabel.fontColor = UIColor(white: 0.96, alpha: 1)
-        subLabel.position = CGPoint(x: frame.midX, y: frame.midY + 70)
-        subLabel.zPosition = 69
-        subLabel.alpha = 0
-        addChild(subLabel)
-        subLabel.run(.sequence([
-            .fadeIn(withDuration: 0.14),
-            .wait(forDuration: 0.7),
-            .fadeOut(withDuration: 0.28),
-            .removeFromParent()
-        ]))
     }
 
     private func isChallengeComplete(onSuccess success: Bool) -> Bool {
@@ -1212,16 +1292,36 @@ final class GameScene: SKScene {
         challengeLabel.fontColor = challengeLabelColor(completed: completed)
     }
 
+    private func activeBlocks() -> [IceBlockNode] {
+        iceBlocks.filter { !$0.isBreaking && $0.parent != nil }
+    }
+
+    private func spawnBlock(from config: IceBlockConfig, animated: Bool) {
+        let blockSize: CGFloat = 48
+        let block = IceBlockNode(type: config.type, size: CGSize(width: blockSize, height: blockSize))
+        block.position = CGPoint(x: frame.width * config.x, y: frame.height * config.y)
+        block.zPosition = 8
+        if animated {
+            block.alpha = 0
+            block.setScale(0.72)
+        }
+        addChild(block)
+        applyMotionIfNeeded(to: block, index: spawnedBlockCount)
+        spawnedBlockCount += 1
+        iceBlocks.append(block)
+
+        guard animated else { return }
+        block.run(.group([
+            .fadeIn(withDuration: 0.16),
+            .scale(to: 1.0, duration: 0.18)
+        ]))
+    }
+
     private func setupIceBlocks() {
         iceBlocks.removeAll()
-        for (index, config) in levelConfig.iceBlocks.enumerated() {
-            let blockSize: CGFloat = 48
-            let block = IceBlockNode(type: config.type, size: CGSize(width: blockSize, height: blockSize))
-            block.position = CGPoint(x: frame.width * config.x, y: frame.height * config.y)
-            block.zPosition = 8
-            addChild(block)
-            applyMotionIfNeeded(to: block, index: index)
-            iceBlocks.append(block)
+        spawnedBlockCount = 0
+        for config in levelConfig.iceBlocks {
+            spawnBlock(from: config, animated: false)
         }
     }
 
@@ -1776,6 +1876,7 @@ final class GameScene: SKScene {
         trailEmitter = nil
         bestShotDestroyedCount = max(bestShotDestroyedCount, roundComboCount)
         updateChallengeDisplay()
+        maybeDeployReinforcementWave()
         maybeTriggerFinalAssault()
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
@@ -1787,8 +1888,13 @@ final class GameScene: SKScene {
 
     private func checkLevelComplete() {
         guard !hasPresentedResult else { return }
+        guard !isDeployingReinforcementWave else { return }
 
-        let activeBlocks = iceBlocks.filter { !$0.isBreaking && $0.parent != nil }
+        if maybeDeployReinforcementWave() {
+            return
+        }
+
+        let activeBlocks = activeBlocks()
         if activeBlocks.isEmpty {
             showResult(success: true)
         } else if penguinsRemaining <= 0, activePenguin == nil {
@@ -1796,6 +1902,20 @@ final class GameScene: SKScene {
         } else if activePenguin == nil {
             reloadSlingshot()
         }
+    }
+
+    private func calculateOperationRank(success: Bool, stars: Int, challengeCompleted: Bool) -> OperationRank {
+        guard success else { return .d }
+        if stars >= 3 && challengeCompleted {
+            return .s
+        }
+        if stars >= 3 || (stars == 2 && challengeCompleted) {
+            return .a
+        }
+        if stars >= 2 || challengeCompleted {
+            return .b
+        }
+        return .c
     }
 
     private func challengeOutcomeText(
@@ -1844,6 +1964,9 @@ final class GameScene: SKScene {
             : VictoryBonusSummary(remainingPenguinBonus: 0, clearBonus: 0, challengeBonus: 0)
         let stars = success ? calculateStars() : 0
         let previousBest = SaveManager.shared.record(for: currentLevel)?.score ?? 0
+        let operationRank = calculateOperationRank(success: success, stars: stars, challengeCompleted: challengeCompleted)
+        let isNewBestRank = SaveManager.shared.updateRank(level: currentLevel, rank: operationRank)
+        let bestRank = SaveManager.shared.bestRank(for: currentLevel)
 
         if success {
             AudioManager.shared.playGameWinSound()
@@ -1867,7 +1990,7 @@ final class GameScene: SKScene {
         dim.zPosition = -1
         overlay.addChild(dim)
 
-        let panel = SKShapeNode(rectOf: CGSize(width: min(frame.width * 0.82, 340), height: 360), cornerRadius: 24)
+        let panel = SKShapeNode(rectOf: CGSize(width: min(frame.width * 0.82, 340), height: 388), cornerRadius: 24)
         panel.fillColor = UIColor(white: 1, alpha: 0.13)
         panel.strokeColor = UIColor(white: 1, alpha: 0.24)
         panel.lineWidth = 2
@@ -1878,15 +2001,23 @@ final class GameScene: SKScene {
         titleLabel.text = resultTitle(success: success)
         titleLabel.fontSize = 32
         titleLabel.fontColor = .white
-        titleLabel.position = CGPoint(x: 0, y: 108)
+        titleLabel.position = CGPoint(x: 0, y: 118)
         titleLabel.alpha = 0
         panel.addChild(titleLabel)
+
+        let rankLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
+        rankLabel.text = "战役评级 \(operationRank.displayText)"
+        rankLabel.fontSize = 22
+        rankLabel.fontColor = operationRank.accentColor
+        rankLabel.position = CGPoint(x: 0, y: 84)
+        rankLabel.alpha = 0
+        panel.addChild(rankLabel)
 
         let resultScoreLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
         resultScoreLabel.text = "总分 \(score)"
         resultScoreLabel.fontSize = 28
         resultScoreLabel.fontColor = palette.accent
-        resultScoreLabel.position = CGPoint(x: 0, y: 60)
+        resultScoreLabel.position = CGPoint(x: 0, y: 52)
         resultScoreLabel.alpha = 0
         panel.addChild(resultScoreLabel)
 
@@ -1895,19 +2026,21 @@ final class GameScene: SKScene {
             ? "\(levelPresentation.operationTitle) · Boss"
             : levelPresentation.operationTitle
         targetSummary.text = overdriveActivations > 0
-            ? "\(missionPrefix) · 目标 \(scorePlan.targetScore) · \(shotsFired) 发 · 爆发 \(overdriveActivations) 次"
-            : "\(missionPrefix) · 目标 \(scorePlan.targetScore) · \(shotsFired) 发"
+            ? "\(missionPrefix) · 阶段 \(currentPhaseIndex)/\(encounterPlan.totalPhaseCount) · \(shotsFired) 发 · 爆发 \(overdriveActivations) 次"
+            : "\(missionPrefix) · 阶段 \(currentPhaseIndex)/\(encounterPlan.totalPhaseCount) · \(shotsFired) 发"
         targetSummary.fontSize = 15
         targetSummary.fontColor = UIColor(white: 0.92, alpha: 1)
-        targetSummary.position = CGPoint(x: 0, y: 26)
+        targetSummary.position = CGPoint(x: 0, y: 20)
         targetSummary.alpha = 0
         panel.addChild(targetSummary)
 
         let challengeTitle = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
-        challengeTitle.text = "精英挑战：\(challengePlan.detail)"
+        challengeTitle.text = isNewBestRank
+            ? "精英挑战：\(challengePlan.shortTitle) · 评级刷新"
+            : "精英挑战：\(challengePlan.shortTitle) · \(bestRank.map { "最佳 \($0.displayText)" } ?? "待评级")"
         challengeTitle.fontSize = 14
         challengeTitle.fontColor = UIColor(white: 0.94, alpha: 1)
-        challengeTitle.position = CGPoint(x: 0, y: 2)
+        challengeTitle.position = CGPoint(x: 0, y: -4)
         challengeTitle.alpha = 0
         panel.addChild(challengeTitle)
 
@@ -1916,7 +2049,7 @@ final class GameScene: SKScene {
             bonusLine1.text = "剩余企鹅奖励 +\(bonusSummary.remainingPenguinBonus)"
             bonusLine1.fontSize = 15
             bonusLine1.fontColor = UIColor(white: 0.96, alpha: 1)
-            bonusLine1.position = CGPoint(x: 0, y: -24)
+            bonusLine1.position = CGPoint(x: 0, y: -30)
             bonusLine1.alpha = 0
             panel.addChild(bonusLine1)
 
@@ -1924,7 +2057,7 @@ final class GameScene: SKScene {
             bonusLine2.text = "通关奖励 +\(bonusSummary.clearBonus)"
             bonusLine2.fontSize = 15
             bonusLine2.fontColor = UIColor(white: 0.96, alpha: 1)
-            bonusLine2.position = CGPoint(x: 0, y: -48)
+            bonusLine2.position = CGPoint(x: 0, y: -54)
             bonusLine2.alpha = 0
             panel.addChild(bonusLine2)
 
@@ -1940,7 +2073,7 @@ final class GameScene: SKScene {
             bonusLine3.fontColor = challengeCompleted
                 ? UIColor(red: 0.34, green: 0.88, blue: 0.52, alpha: 1)
                 : UIColor(red: 1.0, green: 0.82, blue: 0.45, alpha: 1)
-            bonusLine3.position = CGPoint(x: 0, y: -72)
+            bonusLine3.position = CGPoint(x: 0, y: -78)
             bonusLine3.alpha = 0
             panel.addChild(bonusLine3)
 
@@ -1958,7 +2091,7 @@ final class GameScene: SKScene {
             )
             challengeLine.fontSize = 15
             challengeLine.fontColor = UIColor(white: 0.96, alpha: 1)
-            challengeLine.position = CGPoint(x: 0, y: -24)
+            challengeLine.position = CGPoint(x: 0, y: -30)
             challengeLine.alpha = 0
             panel.addChild(challengeLine)
 
@@ -1966,7 +2099,7 @@ final class GameScene: SKScene {
             tipLabel.text = failureTipText()
             tipLabel.fontSize = 15
             tipLabel.fontColor = UIColor(white: 0.96, alpha: 1)
-            tipLabel.position = CGPoint(x: 0, y: -50)
+            tipLabel.position = CGPoint(x: 0, y: -56)
             tipLabel.alpha = 0
             panel.addChild(tipLabel)
             challengeLine.run(.sequence([.wait(forDuration: 0.42), .fadeIn(withDuration: 0.24)]))
@@ -1977,7 +2110,7 @@ final class GameScene: SKScene {
         starsLabel.text = success ? String(repeating: "★", count: max(stars, 1)) : "未通关"
         starsLabel.fontSize = 28
         starsLabel.fontColor = success && stars > 0 ? UIColor(red: 1, green: 0.88, blue: 0.36, alpha: 1) : UIColor(white: 0.78, alpha: 1)
-        starsLabel.position = CGPoint(x: 0, y: -100)
+        starsLabel.position = CGPoint(x: 0, y: -110)
         starsLabel.alpha = 0
         panel.addChild(starsLabel)
 
@@ -1995,7 +2128,7 @@ final class GameScene: SKScene {
             name: primaryButtonName,
             title: primaryButtonTitle,
             color: success ? UIColor(red: 0.26, green: 0.72, blue: 0.44, alpha: 1) : UIColor(red: 0.79, green: 0.36, blue: 0.34, alpha: 1),
-            position: CGPoint(x: 0, y: -140)
+            position: CGPoint(x: 0, y: -152)
         )
         primaryButton.alpha = 0
         panel.addChild(primaryButton)
@@ -2004,19 +2137,20 @@ final class GameScene: SKScene {
             name: "resultBackButton",
             title: "返回选关",
             color: UIColor(white: 0.34, alpha: 0.92),
-            position: CGPoint(x: 0, y: -184)
+            position: CGPoint(x: 0, y: -196)
         )
         backButton.alpha = 0
         panel.addChild(backButton)
 
         let fadeIn = SKAction.fadeIn(withDuration: 0.25)
         titleLabel.run(.sequence([.wait(forDuration: 0.16), fadeIn]))
-        resultScoreLabel.run(.sequence([.wait(forDuration: 0.28), fadeIn]))
-        targetSummary.run(.sequence([.wait(forDuration: 0.36), fadeIn]))
-        challengeTitle.run(.sequence([.wait(forDuration: 0.44), fadeIn]))
-        starsLabel.run(.sequence([.wait(forDuration: 0.78), fadeIn]))
-        primaryButton.run(.sequence([.wait(forDuration: 0.9), fadeIn]))
-        backButton.run(.sequence([.wait(forDuration: 1.0), fadeIn]))
+        rankLabel.run(.sequence([.wait(forDuration: 0.24), fadeIn]))
+        resultScoreLabel.run(.sequence([.wait(forDuration: 0.32), fadeIn]))
+        targetSummary.run(.sequence([.wait(forDuration: 0.40), fadeIn]))
+        challengeTitle.run(.sequence([.wait(forDuration: 0.48), fadeIn]))
+        starsLabel.run(.sequence([.wait(forDuration: 0.82), fadeIn]))
+        primaryButton.run(.sequence([.wait(forDuration: 0.94), fadeIn]))
+        backButton.run(.sequence([.wait(forDuration: 1.04), fadeIn]))
 
         if success {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { [weak self] in
@@ -2035,6 +2169,7 @@ final class GameScene: SKScene {
         activePenguin = nil
         activePenguinOverdrive = false
         overdriveShockwavesRemaining = 0
+        isDeployingReinforcementWave = false
         penguinNode?.removeAllActions()
         penguinNode?.removeFromParent()
         penguinNode = nil

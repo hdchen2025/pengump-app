@@ -83,6 +83,21 @@ struct LevelPresentation {
     let isBossLevel: Bool
 }
 
+struct ReinforcementWave {
+    let triggerRemainingBlocks: Int
+    let title: String
+    let detail: String
+    let blockConfigs: [IceBlockConfig]
+}
+
+struct LevelEncounterPlan {
+    let reinforcementWaves: [ReinforcementWave]
+
+    var totalPhaseCount: Int {
+        1 + reinforcementWaves.count
+    }
+}
+
 // MARK: - 15关配置数组
 
 struct Levels {
@@ -189,6 +204,14 @@ struct Levels {
         }
     }
 
+    static func operationBadge(for level: Int) -> String {
+        let encounter = encounter(for: level)
+        guard encounter.totalPhaseCount > 1 else {
+            return levelBadge(for: level)
+        }
+        return "\(levelBadge(for: level)) · \(encounter.totalPhaseCount)阶段"
+    }
+
     static func presentation(for level: Int) -> LevelPresentation {
         switch level {
         case 1:
@@ -224,8 +247,116 @@ struct Levels {
         }
     }
 
-    static func scorePlan(for config: LevelConfig) -> LevelScorePlan {
-        let baseScore = config.iceBlocks.reduce(0) { partialResult, block in
+    static func encounter(for level: Int) -> LevelEncounterPlan {
+        switch level {
+        case 5:
+            return LevelEncounterPlan(reinforcementWaves: [
+                ReinforcementWave(
+                    triggerRemainingBlocks: 2,
+                    title: "裂冰亲卫",
+                    detail: "Boss 核心护卫已进场",
+                    blockConfigs: [
+                        IceBlockConfig(type: .cracked, x: 0.62, y: 0.76),
+                        IceBlockConfig(type: .normal, x: 0.70, y: 0.76),
+                        IceBlockConfig(type: .cracked, x: 0.78, y: 0.76),
+                        IceBlockConfig(type: .explosive, x: 0.70, y: 0.63)
+                    ]
+                )
+            ])
+        case 8:
+            return LevelEncounterPlan(reinforcementWaves: [
+                ReinforcementWave(
+                    triggerRemainingBlocks: 3,
+                    title: "滑靶增援",
+                    detail: "追击小队切入战场",
+                    blockConfigs: [
+                        IceBlockConfig(type: .normal, x: 0.58, y: 0.64),
+                        IceBlockConfig(type: .cracked, x: 0.68, y: 0.64),
+                        IceBlockConfig(type: .normal, x: 0.78, y: 0.64),
+                        IceBlockConfig(type: .explosive, x: 0.68, y: 0.49)
+                    ]
+                )
+            ])
+        case 10:
+            return LevelEncounterPlan(reinforcementWaves: [
+                ReinforcementWave(
+                    triggerRemainingBlocks: 4,
+                    title: "寒堡二阶段",
+                    detail: "堡垒核心重新成形",
+                    blockConfigs: [
+                        IceBlockConfig(type: .cracked, x: 0.58, y: 0.73),
+                        IceBlockConfig(type: .normal, x: 0.66, y: 0.73),
+                        IceBlockConfig(type: .normal, x: 0.74, y: 0.73),
+                        IceBlockConfig(type: .cracked, x: 0.82, y: 0.73),
+                        IceBlockConfig(type: .explosive, x: 0.70, y: 0.60)
+                    ]
+                )
+            ])
+        case 12:
+            return LevelEncounterPlan(reinforcementWaves: [
+                ReinforcementWave(
+                    triggerRemainingBlocks: 4,
+                    title: "倒塔反扑",
+                    detail: "底部支点正在重组",
+                    blockConfigs: [
+                        IceBlockConfig(type: .cracked, x: 0.58, y: 0.28),
+                        IceBlockConfig(type: .normal, x: 0.66, y: 0.28),
+                        IceBlockConfig(type: .normal, x: 0.74, y: 0.28),
+                        IceBlockConfig(type: .explosive, x: 0.66, y: 0.16)
+                    ]
+                )
+            ])
+        case 14:
+            return LevelEncounterPlan(reinforcementWaves: [
+                ReinforcementWave(
+                    triggerRemainingBlocks: 5,
+                    title: "火线逆袭",
+                    detail: "变轨突击队已抵达",
+                    blockConfigs: [
+                        IceBlockConfig(type: .explosive, x: 0.56, y: 0.78),
+                        IceBlockConfig(type: .normal, x: 0.64, y: 0.78),
+                        IceBlockConfig(type: .cracked, x: 0.72, y: 0.78),
+                        IceBlockConfig(type: .normal, x: 0.80, y: 0.78),
+                        IceBlockConfig(type: .explosive, x: 0.68, y: 0.64)
+                    ]
+                )
+            ])
+        case 15:
+            return LevelEncounterPlan(reinforcementWaves: [
+                ReinforcementWave(
+                    triggerRemainingBlocks: 5,
+                    title: "王城护卫",
+                    detail: "外城防线再次闭合",
+                    blockConfigs: [
+                        IceBlockConfig(type: .cracked, x: 0.54, y: 0.76),
+                        IceBlockConfig(type: .normal, x: 0.62, y: 0.76),
+                        IceBlockConfig(type: .explosive, x: 0.70, y: 0.76),
+                        IceBlockConfig(type: .normal, x: 0.78, y: 0.76),
+                        IceBlockConfig(type: .cracked, x: 0.86, y: 0.76)
+                    ]
+                ),
+                ReinforcementWave(
+                    triggerRemainingBlocks: 2,
+                    title: "王座核心",
+                    detail: "终幕核心已经暴露",
+                    blockConfigs: [
+                        IceBlockConfig(type: .cracked, x: 0.62, y: 0.84),
+                        IceBlockConfig(type: .explosive, x: 0.70, y: 0.84),
+                        IceBlockConfig(type: .cracked, x: 0.78, y: 0.84),
+                        IceBlockConfig(type: .explosive, x: 0.70, y: 0.70)
+                    ]
+                )
+            ])
+        default:
+            return LevelEncounterPlan(reinforcementWaves: [])
+        }
+    }
+
+    static func scorePlan(for level: Int) -> LevelScorePlan {
+        let config = config(for: level)
+        let encounter = encounter(for: level)
+        let allBlocks = config.iceBlocks + encounter.reinforcementWaves.flatMap(\.blockConfigs)
+        let baseScore = allBlocks.reduce(0) { partialResult, block in
             partialResult + blockScore(for: block.type)
         }
         let perfectScore = baseScore
