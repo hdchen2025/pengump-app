@@ -1159,6 +1159,7 @@ final class GameScene: SKScene {
         guard !isDeployingReinforcementWave, !hasPresentedResult, activePenguin == nil else { return false }
         guard let nextWave = pendingReinforcementWaves.first else { return false }
         guard activeBlocks().count <= nextWave.triggerRemainingBlocks else { return false }
+        guard penguinsRemaining > 0 || penguinNode != nil else { return false }
 
         isDeployingReinforcementWave = true
         pendingReinforcementWaves.removeFirst()
@@ -1895,9 +1896,16 @@ final class GameScene: SKScene {
         }
 
         let activeBlocks = activeBlocks()
+        let canContinueBattle = activePenguin != nil || penguinNode != nil || penguinsRemaining > 0
         if activeBlocks.isEmpty {
-            showResult(success: true)
-        } else if penguinsRemaining <= 0, activePenguin == nil {
+            if pendingReinforcementWaves.isEmpty {
+                showResult(success: true)
+            } else if canContinueBattle {
+                reloadSlingshot()
+            } else {
+                showResult(success: false)
+            }
+        } else if !canContinueBattle {
             showResult(success: false)
         } else if activePenguin == nil {
             reloadSlingshot()
@@ -1937,6 +1945,12 @@ final class GameScene: SKScene {
     }
 
     private func failureTipText() -> String {
+        if encounterPlan.totalPhaseCount > 1 {
+            return currentPhaseIndex < encounterPlan.totalPhaseCount
+                ? "这关有增援波次，前半段别把火力一次打空。"
+                : "终局阶段火压更高，保留企鹅才能稳住收尾。"
+        }
+
         switch challengePlan.kind {
         case .precision:
             return "少出手的关键是压低角度，先拆底层支点。"
@@ -1965,7 +1979,7 @@ final class GameScene: SKScene {
         let stars = success ? calculateStars() : 0
         let previousBest = SaveManager.shared.record(for: currentLevel)?.score ?? 0
         let operationRank = calculateOperationRank(success: success, stars: stars, challengeCompleted: challengeCompleted)
-        let isNewBestRank = SaveManager.shared.updateRank(level: currentLevel, rank: operationRank)
+        let isNewBestRank = success ? SaveManager.shared.updateRank(level: currentLevel, rank: operationRank) : false
         let bestRank = SaveManager.shared.bestRank(for: currentLevel)
 
         if success {
@@ -2035,9 +2049,11 @@ final class GameScene: SKScene {
         panel.addChild(targetSummary)
 
         let challengeTitle = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
-        challengeTitle.text = isNewBestRank
-            ? "精英挑战：\(challengePlan.shortTitle) · 评级刷新"
-            : "精英挑战：\(challengePlan.shortTitle) · \(bestRank.map { "最佳 \($0.displayText)" } ?? "待评级")"
+        challengeTitle.text = success
+            ? (isNewBestRank
+                ? "精英挑战：\(challengePlan.shortTitle) · 评级刷新"
+                : "精英挑战：\(challengePlan.shortTitle) · \(bestRank.map { "最佳 \($0.displayText)" } ?? "待评级")")
+            : (bestRank.map { "精英挑战：\(challengePlan.shortTitle) · 历史 \($0.displayText)" } ?? "精英挑战：\(challengePlan.shortTitle)")
         challengeTitle.fontSize = 14
         challengeTitle.fontColor = UIColor(white: 0.94, alpha: 1)
         challengeTitle.position = CGPoint(x: 0, y: -4)

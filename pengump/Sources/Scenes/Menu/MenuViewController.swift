@@ -202,10 +202,11 @@ final class MenuViewController: UIViewController {
         let presentation = Levels.presentation(for: spotlightLevel)
         let nextBattlePrefix = presentation.isBossLevel ? "下一战 BOSS" : "下一战"
 
-        progressValueLabel.text = "已解锁 \(min(unlocked, Levels.totalLevels))/\(Levels.totalLevels) 关 · 统治值 \(dominance)%"
+        progressValueLabel.text = "战役统治 \(dominance)%"
         progressDetailLabel.text = """
+        已解锁 \(min(unlocked, Levels.totalLevels))/\(Levels.totalLevels) 关 · 最高分 \(bestScore)
         星 \(totalStars) / \(Levels.totalLevels * 3) · 勋章 \(medals) / \(Levels.totalLevels) · S 评级 \(sRanks) 关
-        战役强度 \(SaveManager.shared.campaignPower) · 最高分 \(bestScore)
+        战役强度 \(SaveManager.shared.campaignPower)
         当前战区 \(presentation.chapterTitle) · \(nextBattlePrefix) \(presentation.operationTitle)
         """
     }
