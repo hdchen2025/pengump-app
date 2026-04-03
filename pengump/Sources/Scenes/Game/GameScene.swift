@@ -251,6 +251,7 @@ class GameScene: SKScene {
     private var penguinCountLabel: SKLabelNode!
     private var hintLabel: SKLabelNode!
     private var resultOverlay: SKNode?
+    private var hasPresentedResult: Bool = false
 
     // MARK: - 初始化
 
@@ -574,6 +575,11 @@ class GameScene: SKScene {
         node.calculateAccumulatedFrame().insetBy(dx: -expandBy, dy: -expandBy)
     }
 
+    private func isNodeInteractable(_ node: SKNode?, minimumAlpha: CGFloat = 0.95) -> Bool {
+        guard let node else { return false }
+        return node.parent != nil && !node.isHidden && node.alpha >= minimumAlpha
+    }
+
     // MARK: - 触摸控制
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -584,16 +590,19 @@ class GameScene: SKScene {
         if let overlay = resultOverlay {
             let overlayLocation = touch.location(in: overlay)
             if let nextBtn = overlay.childNode(withName: "nextButton"),
+               isNodeInteractable(nextBtn),
                hitFrame(for: nextBtn, expandBy: 10).contains(overlayLocation) {
                 goToNextLevel()
                 return
             }
             if let retryBtn = overlay.childNode(withName: "retryButton"),
+               isNodeInteractable(retryBtn),
                hitFrame(for: retryBtn, expandBy: 10).contains(overlayLocation) {
                 retryLevel()
                 return
             }
             if let backBtn = overlay.childNode(withName: "resultBackButton"),
+               isNodeInteractable(backBtn),
                hitFrame(for: backBtn, expandBy: 10).contains(overlayLocation) {
                 dismiss(animated: true)
                 return
@@ -1029,9 +1038,13 @@ class GameScene: SKScene {
     // MARK: - 关卡判定
 
     private func checkLevelComplete() {
+        guard !hasPresentedResult else { return }
+
         let activeBlocks = iceBlocks.filter { !$0.isBreaking && $0.parent != nil }
         if activeBlocks.isEmpty {
             showResult(success: true)
+        } else if activePenguin != nil || flightState == .flying {
+            return
         } else if penguinsRemaining <= 0 {
             showResult(success: false)
         } else {
@@ -1040,6 +1053,9 @@ class GameScene: SKScene {
     }
 
     private func showResult(success: Bool) {
+        guard !hasPresentedResult else { return }
+        hasPresentedResult = true
+
         // 播放结果音效
         if success {
             AudioManager.shared.playGameWinSound()

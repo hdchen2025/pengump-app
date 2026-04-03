@@ -134,11 +134,11 @@ class SaveManager {
         let record = ScoreRecord(level: level, score: score, stars: stars, date: Date())
 
         if let existing = highestScores[level] {
-            if score > existing.score {
-                highestScores[level] = record
-            } else if stars > existing.stars {
-                // 星级更高时也更新
-                highestScores[level] = ScoreRecord(level: level, score: max(score, existing.score), stars: stars, date: existing.date)
+            let mergedScore = max(score, existing.score)
+            let mergedStars = max(stars, existing.stars)
+
+            if mergedScore > existing.score || mergedStars > existing.stars {
+                highestScores[level] = ScoreRecord(level: level, score: mergedScore, stars: mergedStars, date: Date())
             }
         } else {
             highestScores[level] = record
