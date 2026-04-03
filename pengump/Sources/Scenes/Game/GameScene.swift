@@ -379,7 +379,7 @@ class GameScene: SKScene {
         let startX = frame.width * 0.06
         let spacing: CGFloat = 42
 
-        for i in 0..<penguinsRemaining {
+        for i in 0..<max(penguinsRemaining - 1, 0) {
             let penguin = createPenguinNode()
             penguin.position = CGPoint(x: startX + CGFloat(i) * spacing, y: queueY)
             penguin.alpha = 0.6
@@ -390,7 +390,7 @@ class GameScene: SKScene {
     }
 
     private func createPenguinNode() -> SKSpriteNode {
-        let penguin = SKSpriteNode()
+        let penguin = SKSpriteNode(color: .clear, size: CGSize(width: 36, height: 42))
         penguin.name = "penguin"
 
         let body = SKShapeNode(ellipseOf: CGSize(width: 26, height: 30))
@@ -475,8 +475,7 @@ class GameScene: SKScene {
     }
 
     private func reloadSlingshot() {
-        guard penguinNode == nil || flightState == .ready else { return }
-        guard penguinsRemaining > 0 else { return }
+        guard penguinNode == nil, activePenguin == nil, penguinsRemaining > 0 else { return }
 
         penguinNode = createPenguinNode()
         let launchPos = CGPoint(x: slingshotBase.position.x, y: slingshotAnchorLeft.y)
@@ -571,6 +570,10 @@ class GameScene: SKScene {
         }
     }
 
+    private func hitFrame(for node: SKNode, expandBy: CGFloat = 0) -> CGRect {
+        node.calculateAccumulatedFrame().insetBy(dx: -expandBy, dy: -expandBy)
+    }
+
     // MARK: - 触摸控制
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -581,17 +584,17 @@ class GameScene: SKScene {
         if let overlay = resultOverlay {
             let overlayLocation = touch.location(in: overlay)
             if let nextBtn = overlay.childNode(withName: "nextButton"),
-               nextBtn.frame.insetBy(dx: -10, dy: -10).contains(overlayLocation) {
+               hitFrame(for: nextBtn, expandBy: 10).contains(overlayLocation) {
                 goToNextLevel()
                 return
             }
             if let retryBtn = overlay.childNode(withName: "retryButton"),
-               retryBtn.frame.insetBy(dx: -10, dy: -10).contains(overlayLocation) {
+               hitFrame(for: retryBtn, expandBy: 10).contains(overlayLocation) {
                 retryLevel()
                 return
             }
             if let backBtn = overlay.childNode(withName: "resultBackButton"),
-               backBtn.frame.insetBy(dx: -10, dy: -10).contains(overlayLocation) {
+               hitFrame(for: backBtn, expandBy: 10).contains(overlayLocation) {
                 dismiss(animated: true)
                 return
             }
@@ -600,7 +603,7 @@ class GameScene: SKScene {
 
         // 返回按钮
         if let backBtn = childNode(withName: "backButton"),
-           backBtn.frame.insetBy(dx: -10, dy: -10).contains(location) {
+           hitFrame(for: backBtn, expandBy: 10).contains(location) {
             dismiss(animated: true)
             return
         }
@@ -608,7 +611,7 @@ class GameScene: SKScene {
         // 开始瞄准
         if flightState == .ready,
            let penguin = penguinNode,
-           penguin.frame.insetBy(dx: -20, dy: -20).contains(location) {
+           hitFrame(for: penguin, expandBy: 20).contains(location) {
             flightState = .aiming
             trajectoryLine.isHidden = false
         }
@@ -629,8 +632,8 @@ class GameScene: SKScene {
         if angle > 0 { angle = min(angle, maxAngle) }
         else { angle = max(angle, -maxAngle) }
 
-        let pullX = anchorPos.x - cos(angle) * distance
-        let pullY = anchorPos.y - sin(angle) * distance
+        let pullX = anchorPos.x + cos(angle) * distance
+        let pullY = anchorPos.y + sin(angle) * distance
         let clampedPos = CGPoint(x: pullX, y: pullY)
 
         penguinNode?.position = clampedPos
@@ -1103,22 +1106,20 @@ class GameScene: SKScene {
         btnText.position = CGPoint(x: 0, y: -4)
         actionBtn.addChild(btnText)
 
-        if success && currentLevel < Levels.totalLevels {
-            let backBtn = SKShapeNode(rectOf: CGSize(width: 120, height: 40), cornerRadius: 8)
-            backBtn.fillColor = UIColor(white: 0.4, alpha: 0.8)
-            backBtn.strokeColor = .white
-            backBtn.lineWidth = 1
-            backBtn.position = CGPoint(x: 0, y: -150)
-            backBtn.name = "resultBackButton"
-            backBtn.alpha = 0
-            resultOverlay?.addChild(backBtn)
+        let backBtn = SKShapeNode(rectOf: CGSize(width: 120, height: 40), cornerRadius: 8)
+        backBtn.fillColor = UIColor(white: 0.4, alpha: 0.8)
+        backBtn.strokeColor = .white
+        backBtn.lineWidth = 1
+        backBtn.position = CGPoint(x: 0, y: -150)
+        backBtn.name = "resultBackButton"
+        backBtn.alpha = 0
+        resultOverlay?.addChild(backBtn)
 
-            let backBtnText = SKLabelNode(text: "← 返回选关")
-            backBtnText.fontSize = 14
-            backBtnText.fontColor = .white
-            backBtnText.position = CGPoint(x: 0, y: -3)
-            backBtn.addChild(backBtnText)
-        }
+        let backBtnText = SKLabelNode(text: "← 返回选关")
+        backBtnText.fontSize = 14
+        backBtnText.fontColor = .white
+        backBtnText.position = CGPoint(x: 0, y: -3)
+        backBtn.addChild(backBtnText)
 
         let fadeIn = SKAction.fadeIn(withDuration: 0.3)
         titleLabel.run(SKAction.sequence([SKAction.wait(forDuration: 0.2), fadeIn]))
@@ -1132,9 +1133,7 @@ class GameScene: SKScene {
             }
         }
         actionBtn.run(SKAction.sequence([SKAction.wait(forDuration: 0.8), fadeIn]))
-        if success && currentLevel < Levels.totalLevels {
-            resultOverlay?.childNode(withName: "resultBackButton")?.run(SKAction.sequence([SKAction.wait(forDuration: 0.9), fadeIn]))
-        }
+        resultOverlay?.childNode(withName: "resultBackButton")?.run(SKAction.sequence([SKAction.wait(forDuration: 0.9), fadeIn]))
 
         isUserInteractionEnabled = true
     }
