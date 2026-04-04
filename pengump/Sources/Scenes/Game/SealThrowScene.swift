@@ -74,6 +74,7 @@ final class SealThrowScene: SKScene {
     private var cooldownRestartDeadline: TimeInterval?
     private var activeThrowNumber = 1
     private var activeOnboardingStage = 0
+    private var hasCompletedSceneSetup = false
 
     private var skyNode: SKSpriteNode!
     private var horizonNode: SKSpriteNode!
@@ -124,6 +125,7 @@ final class SealThrowScene: SKScene {
 
     override func didMove(to view: SKView) {
         scaleMode = .resizeFill
+        guard !hasCompletedSceneSetup else { return }
         setupScene()
         resetSessionProgress()
         resetForNextThrow(showHint: true)
@@ -131,6 +133,7 @@ final class SealThrowScene: SKScene {
 
     override func didChangeSize(_ oldSize: CGSize) {
         super.didChangeSize(oldSize)
+        guard hasCompletedSceneSetup else { return }
         skyNode?.size = CGSize(width: size.width * 1.5, height: size.height * 1.5)
         horizonNode?.size = CGSize(width: size.width * 1.5, height: size.height * 0.45)
         updateGroundPath(centerX: cameraNode.position.x)
@@ -241,6 +244,7 @@ final class SealThrowScene: SKScene {
     }
 
     private func setupScene() {
+        guard !hasCompletedSceneSetup else { return }
         backgroundColor = .black
         addChild(worldNode)
 
@@ -276,6 +280,7 @@ final class SealThrowScene: SKScene {
         layoutSpeedLines()
         updateGroundPath(centerX: cameraNode.position.x)
         updateFeatureNodes(aroundX: cameraNode.position.x)
+        hasCompletedSceneSetup = true
     }
 
     private func setupSeal() {
