@@ -1014,8 +1014,10 @@ class GameScene: SKScene {
 
     private func updateCannonAim(at location: CGPoint) {
         let pivot = cannonPivotPosition()
-        let forwardX = max(location.x - pivot.x, 8)
-        let lift = max(location.y - pivot.y, 8)
+        let rawForwardX = location.x - pivot.x
+        let rawLift = location.y - pivot.y
+        let forwardX = max(rawForwardX, 0)
+        let lift = max(rawLift, 0)
         let distance = min(hypot(forwardX, lift), physics.maxPullDistance)
         let normalizedDistance = max(0, distance - physics.minPullDistance)
         let powerDenominator = max(1, physics.maxPullDistance - physics.minPullDistance)
@@ -1023,7 +1025,7 @@ class GameScene: SKScene {
         hasChargedShot = aimPower >= physics.minimumLaunchPowerToFire
 
         if forwardX > 6 || lift > 6 {
-            let rawAngle = atan2(lift, forwardX)
+            let rawAngle = atan2(max(lift, 6), max(forwardX, 12))
             aimAngle = min(max(rawAngle, physics.minimumLaunchAngle), physics.maximumLaunchAngle)
         }
 
