@@ -66,6 +66,9 @@ struct DistanceRunOutcome {
     let didCompleteDailyChallenge: Bool
     let newlyUnlockedAchievements: [AchievementID]
     let newlyUnlockedTitle: DistanceTitle?
+    let didStartDailyChallengeToday: Bool
+    let dailyChallengeStreakCount: Int
+    let dailyChallengeStreakText: String
 }
 
 enum DailyChallengeModifier: String, Codable, CaseIterable {
@@ -137,6 +140,63 @@ struct DailyChallenge: Equatable {
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.string(from: date)
     }
+
+    static func date(forDayKey dayKey: String, calendar: Calendar = .current) -> Date? {
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.date(from: dayKey)
+    }
+}
+
+struct DailyChallengeProgressEntry {
+    let challenge: DailyChallenge
+    let bestDistance: Int?
+
+    var didPlay: Bool {
+        bestDistance != nil
+    }
+
+    var didComplete: Bool {
+        guard let bestDistance else { return false }
+        return bestDistance >= challenge.targetDistance
+    }
+
+    var marker: String {
+        if didComplete {
+            return "★"
+        }
+        if didPlay {
+            return "●"
+        }
+        return "○"
+    }
+}
+
+struct DailyChallengeActivitySummary {
+    let recentProgress: [DailyChallengeProgressEntry]
+    let playedDays: Int
+    let completedDays: Int
+    let streakCount: Int
+    let streakIsLowerBound: Bool
+
+    var historyText: String {
+        recentProgress.map(\.marker).joined(separator: " ")
+    }
+
+    var streakText: String {
+        streakIsLowerBound ? "\(streakCount)+" : "\(streakCount)"
+    }
+}
+
+struct DailyChallengeStreakStatus {
+    let count: Int
+    let isLowerBound: Bool
+
+    var displayText: String {
+        isLowerBound ? "\(count)+" : "\(count)"
+    }
 }
 
 // MARK: - SaveManager
@@ -153,9 +213,10 @@ class SaveManager {
     ]
 
     private let defaults = UserDefaults.standard
-    private let currentSaveDataVersion = 4
+    private let currentSaveDataVersion = 5
     private let maxStaminaValue = 30
     private let maxStoredDistanceRecords = 60
+    private let maxStoredDailyChallengeHistory = 30
 
     // UserDefaults keys
     private enum Keys {
@@ -172,6 +233,9 @@ class SaveManager {
         static let perfectReleaseCount = "perfect_release_count"
         static let highestBiomeReached = "highest_biome_reached"
         static let dailyChallengeBestByDate = "daily_challenge_best_by_date"
+        static let dailyChallengeCurrentStreak = "daily_challenge_current_streak"
+        static let dailyChallengeLastPlayedDayKey = "daily_challenge_last_played_day_key"
+        static let dailyChallengeStreakIsLowerBound = "daily_challenge_streak_is_lower_bound"
         static let unlockedAchievements = "unlocked_achievements"
         static let bestInteractionCount = "best_interaction_count"
         static let longestAirTime = "longest_air_time"
@@ -187,6 +251,9 @@ class SaveManager {
     var perfectReleaseCount: Int = 0
     var highestBiomeReached: Int = 0
     var dailyChallengeBestByDate: [String: Int] = [:]
+    private(set) var dailyChallengeCurrentStreak: Int = 0
+    private(set) var dailyChallengeLastPlayedDayKey: String?
+    private(set) var dailyChallengeStreakIsLowerBound: Bool = false
     var unlockedAchievements: [AchievementID] = []
     var bestInteractionCount: Int = 0
     var longestAirTime: TimeInterval = 0
@@ -248,6 +315,9 @@ class SaveManager {
         } else {
             dailyChallengeBestByDate = [:]
         }
+        dailyChallengeCurrentStreak = max(0, defaults.integer(forKey: Keys.dailyChallengeCurrentStreak))
+        dailyChallengeLastPlayedDayKey = defaults.string(forKey: Keys.dailyChallengeLastPlayedDayKey)
+        dailyChallengeStreakIsLowerBound = defaults.bool(forKey: Keys.dailyChallengeStreakIsLowerBound)
         let previousDailyChallengeCount = dailyChallengeBestByDate.count
         if let data = defaults.data(forKey: Keys.unlockedAchievements),
            let decoded = try? JSONDecoder().decode([AchievementID].self, from: data) {
@@ -257,6 +327,7 @@ class SaveManager {
         }
         trimDailyChallengeHistory()
         shouldPersistLoadedState = shouldPersistLoadedState || dailyChallengeBestByDate.count != previousDailyChallengeCount
+        shouldPersistLoadedState = normalizeDailyChallengeStreakState() || shouldPersistLoadedState
 
         if let data = defaults.data(forKey: Keys.distanceRecords),
            let decoded = try? JSONDecoder().decode([DistanceRecord].self, from: data) {
@@ -329,6 +400,9 @@ class SaveManager {
         if let data = try? JSONEncoder().encode(dailyChallengeBestByDate) {
             defaults.set(data, forKey: Keys.dailyChallengeBestByDate)
         }
+        defaults.set(dailyChallengeCurrentStreak, forKey: Keys.dailyChallengeCurrentStreak)
+        defaults.set(dailyChallengeLastPlayedDayKey, forKey: Keys.dailyChallengeLastPlayedDayKey)
+        defaults.set(dailyChallengeStreakIsLowerBound, forKey: Keys.dailyChallengeStreakIsLowerBound)
         if let data = try? JSONEncoder().encode(unlockedAchievements) {
             defaults.set(data, forKey: Keys.unlockedAchievements)
         }
@@ -474,6 +548,69 @@ class SaveManager {
         DistanceTitleProgress.forDistance(distance ?? bestDistance)
     }
 
+    func recentDailyChallengeProgress(
+        days: Int = 7,
+        referenceDate: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [DailyChallengeProgressEntry] {
+        let normalizedDays = max(1, days)
+        let anchorDate = calendar.startOfDay(for: referenceDate)
+
+        return (0..<normalizedDays).compactMap { offset in
+            guard let date = calendar.date(byAdding: .day, value: offset - (normalizedDays - 1), to: anchorDate) else {
+                return nil
+            }
+            let challenge = DailyChallenge.today(date: date, calendar: calendar)
+            return DailyChallengeProgressEntry(
+                challenge: challenge,
+                bestDistance: dailyChallengeBestByDate[challenge.key]
+            )
+        }
+    }
+
+    func dailyChallengeStreak(referenceDate: Date = Date(), calendar: Calendar = .current) -> Int {
+        dailyChallengeStreakStatus(referenceDate: referenceDate, calendar: calendar).count
+    }
+
+    func dailyChallengeStreakStatus(
+        referenceDate: Date = Date(),
+        calendar: Calendar = .current
+    ) -> DailyChallengeStreakStatus {
+        guard dailyChallengeCurrentStreak > 0,
+              let lastPlayedDayKey = dailyChallengeLastPlayedDayKey,
+              let lastPlayedDate = DailyChallenge.date(forDayKey: lastPlayedDayKey, calendar: calendar) else {
+            return DailyChallengeStreakStatus(count: 0, isLowerBound: false)
+        }
+
+        let referenceDay = calendar.startOfDay(for: referenceDate)
+        let lastPlayedDay = calendar.startOfDay(for: lastPlayedDate)
+        let dayOffset = calendar.dateComponents([.day], from: lastPlayedDay, to: referenceDay).day ?? .max
+        guard dayOffset == 0 || dayOffset == 1 else {
+            return DailyChallengeStreakStatus(count: 0, isLowerBound: false)
+        }
+
+        return DailyChallengeStreakStatus(
+            count: dailyChallengeCurrentStreak,
+            isLowerBound: dailyChallengeStreakIsLowerBound
+        )
+    }
+
+    func dailyChallengeActivitySummary(
+        days: Int = 7,
+        referenceDate: Date = Date(),
+        calendar: Calendar = .current
+    ) -> DailyChallengeActivitySummary {
+        let progress = recentDailyChallengeProgress(days: days, referenceDate: referenceDate, calendar: calendar)
+        let streakStatus = dailyChallengeStreakStatus(referenceDate: referenceDate, calendar: calendar)
+        return DailyChallengeActivitySummary(
+            recentProgress: progress,
+            playedDays: progress.filter(\.didPlay).count,
+            completedDays: progress.filter(\.didComplete).count,
+            streakCount: streakStatus.count,
+            streakIsLowerBound: streakStatus.isLowerBound
+        )
+    }
+
     @discardableResult
     func recordDistanceRun(
         distance: Int,
@@ -484,10 +621,14 @@ class SaveManager {
         challenge: DailyChallenge? = nil
     ) -> DistanceRunOutcome {
         let challenge = challenge ?? currentDailyChallenge()
+        let recordDate = Date()
+        let recordDayKey = DailyChallenge.dayKey(for: recordDate)
         let previousBestDistance = bestDistance
+        let didStartRecordedChallengeDay = dailyChallengeBestByDate[challenge.key] == nil
+        let didStartDailyChallengeToday = challenge.key == recordDayKey && didStartRecordedChallengeDay
         let record = DistanceRecord(
             distance: max(0, distance),
-            date: Date(),
+            date: recordDate,
             perfectRelease: perfectRelease,
             highestBiome: max(0, highestBiome)
         )
@@ -507,21 +648,28 @@ class SaveManager {
         longestAirTime = max(longestAirTime, airTime)
         let previousChallengeBest = dailyChallengeBest(for: challenge)
         let didSetDailyChallengeRecord = record.distance > previousChallengeBest
-        if didSetDailyChallengeRecord {
-            dailyChallengeBestByDate[challenge.key] = record.distance
+        if didSetDailyChallengeRecord || didStartRecordedChallengeDay {
+            dailyChallengeBestByDate[challenge.key] = max(previousChallengeBest, record.distance)
             trimDailyChallengeHistory()
+        }
+        if didStartRecordedChallengeDay {
+            registerDailyChallengeParticipation(forDayKey: challenge.key)
         }
         let didCompleteDailyChallenge = previousChallengeBest < challenge.targetDistance
             && max(previousChallengeBest, record.distance) >= challenge.targetDistance
         let newlyUnlockedTitle = DistanceTitle.crossed(previousBest: previousBestDistance, currentDistance: bestDistance)
         let newlyUnlockedAchievements = unlockAchievementsIfNeeded()
+        let streakStatus = dailyChallengeStreakStatus(referenceDate: record.date)
         save()
         return DistanceRunOutcome(
             challenge: challenge,
             didSetDailyChallengeRecord: didSetDailyChallengeRecord,
             didCompleteDailyChallenge: didCompleteDailyChallenge,
             newlyUnlockedAchievements: newlyUnlockedAchievements,
-            newlyUnlockedTitle: newlyUnlockedTitle
+            newlyUnlockedTitle: newlyUnlockedTitle,
+            didStartDailyChallengeToday: didStartDailyChallengeToday,
+            dailyChallengeStreakCount: streakStatus.count,
+            dailyChallengeStreakText: streakStatus.displayText
         )
     }
 
@@ -534,9 +682,13 @@ class SaveManager {
         let challenge = challenge ?? currentDailyChallenge()
         let normalizedDistance = max(0, distance)
         let currentBest = dailyChallengeBestByDate[challenge.key] ?? 0
-        guard normalizedDistance > currentBest else { return }
+        let didStartRecordedChallengeDay = dailyChallengeBestByDate[challenge.key] == nil
+        guard normalizedDistance > currentBest || didStartRecordedChallengeDay else { return }
 
-        dailyChallengeBestByDate[challenge.key] = normalizedDistance
+        dailyChallengeBestByDate[challenge.key] = max(currentBest, normalizedDistance)
+        if didStartRecordedChallengeDay {
+            registerDailyChallengeParticipation(forDayKey: challenge.key)
+        }
         trimDailyChallengeHistory()
         save()
     }
@@ -582,14 +734,94 @@ class SaveManager {
         return nil
     }
 
-    private func trimDailyChallengeHistory(limit: Int = 30) {
-        guard dailyChallengeBestByDate.count > limit else { return }
+    private func trimDailyChallengeHistory() {
+        guard dailyChallengeBestByDate.count > maxStoredDailyChallengeHistory else { return }
 
         let sortedKeys = dailyChallengeBestByDate.keys.sorted()
-        let removeCount = sortedKeys.count - limit
+        let removeCount = sortedKeys.count - maxStoredDailyChallengeHistory
         for key in sortedKeys.prefix(removeCount) {
             dailyChallengeBestByDate.removeValue(forKey: key)
         }
+    }
+
+    @discardableResult
+    private func normalizeDailyChallengeStreakState(calendar: Calendar = .current) -> Bool {
+        let previousStreak = dailyChallengeCurrentStreak
+        let previousDayKey = dailyChallengeLastPlayedDayKey
+        let previousLowerBoundFlag = dailyChallengeStreakIsLowerBound
+
+        guard dailyChallengeCurrentStreak > 0,
+              let lastPlayedDayKey = dailyChallengeLastPlayedDayKey,
+              DailyChallenge.date(forDayKey: lastPlayedDayKey, calendar: calendar) != nil else {
+            rebuildDailyChallengeStreakStateFromHistory(calendar: calendar)
+            return previousStreak != dailyChallengeCurrentStreak
+                || previousDayKey != dailyChallengeLastPlayedDayKey
+                || previousLowerBoundFlag != dailyChallengeStreakIsLowerBound
+        }
+
+        return false
+    }
+
+    private func rebuildDailyChallengeStreakStateFromHistory(calendar: Calendar = .current) {
+        guard let newestDayKey = dailyChallengeBestByDate.keys.max(),
+              let newestDate = DailyChallenge.date(forDayKey: newestDayKey, calendar: calendar) else {
+            dailyChallengeCurrentStreak = 0
+            dailyChallengeLastPlayedDayKey = nil
+            dailyChallengeStreakIsLowerBound = false
+            return
+        }
+
+        var streak = 1
+        var cursorDate = newestDate
+        while let previousDate = calendar.date(byAdding: .day, value: -1, to: cursorDate) {
+            let previousDayKey = DailyChallenge.dayKey(for: previousDate, calendar: calendar)
+            guard dailyChallengeBestByDate[previousDayKey] != nil else {
+                break
+            }
+            streak += 1
+            cursorDate = previousDate
+        }
+
+        if dailyChallengeBestByDate.count >= maxStoredDailyChallengeHistory,
+           streak >= maxStoredDailyChallengeHistory {
+            // Older builds trimmed history to 30 days, so a full 30-day chain is ambiguous.
+            // Keep the known lower bound and mark it as approximate instead of inventing an exact value.
+            dailyChallengeCurrentStreak = maxStoredDailyChallengeHistory
+            dailyChallengeStreakIsLowerBound = true
+        } else {
+            dailyChallengeCurrentStreak = streak
+            dailyChallengeStreakIsLowerBound = false
+        }
+        dailyChallengeLastPlayedDayKey = newestDayKey
+    }
+
+    @discardableResult
+    private func registerDailyChallengeParticipation(forDayKey dayKey: String, calendar: Calendar = .current) -> Int {
+        guard let playedDate = DailyChallenge.date(forDayKey: dayKey, calendar: calendar) else {
+            return dailyChallengeCurrentStreak
+        }
+
+        guard let lastPlayedDayKey = dailyChallengeLastPlayedDayKey,
+              let lastPlayedDate = DailyChallenge.date(forDayKey: lastPlayedDayKey, calendar: calendar) else {
+            dailyChallengeCurrentStreak = 1
+            dailyChallengeLastPlayedDayKey = dayKey
+            dailyChallengeStreakIsLowerBound = false
+            return dailyChallengeCurrentStreak
+        }
+
+        let dayOffset = calendar.dateComponents([.day], from: lastPlayedDate, to: playedDate).day ?? 0
+        if dayOffset <= 0 {
+            return dailyChallengeCurrentStreak
+        }
+
+        if dayOffset == 1 {
+            dailyChallengeCurrentStreak += 1
+        } else {
+            dailyChallengeCurrentStreak = 1
+            dailyChallengeStreakIsLowerBound = false
+        }
+        dailyChallengeLastPlayedDayKey = dayKey
+        return dailyChallengeCurrentStreak
     }
 
     @discardableResult

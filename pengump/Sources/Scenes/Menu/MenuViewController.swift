@@ -17,7 +17,7 @@ class MenuViewController: UIViewController {
 
     private lazy var statusLabel: UILabel = {
         let label = UILabel()
-        label.numberOfLines = 7
+        label.numberOfLines = 0
         label.font = .systemFont(ofSize: 16, weight: .medium)
         label.textColor = UIColor(red: 0.31, green: 0.39, blue: 0.49, alpha: 1.0)
         label.textAlignment = .center
@@ -175,6 +175,7 @@ class MenuViewController: UIViewController {
         let latestRun = saveManager.latestDistanceRecord
         let challenge = saveManager.currentDailyChallenge()
         let challengeText = dailyChallengeSummary(challenge: challenge, saveManager: saveManager)
+        let activityText = dailyChallengeActivitySummary(saveManager: saveManager)
         let achievementText = achievementSummary(saveManager: saveManager)
         let titleText = distanceTitleSummary(saveManager: saveManager)
 
@@ -184,7 +185,7 @@ class MenuViewController: UIViewController {
             statusLabel.text = """
             全局最佳 \(bestDistance)m
             最近一投 \(latestRun.distance)m · \(releaseSummary(for: latestRun))
-            累计远投 \(totalThrows) 次
+            \(activityText)
             今日挑战：\(challenge.title)
             \(challengeText)
             \(achievementText)
@@ -195,6 +196,7 @@ class MenuViewController: UIViewController {
 
         statusLabel.text = """
         目标先冲过 \(DistanceMilestones.all.first ?? 100)m
+        \(activityText)
         今日挑战：\(challenge.title)
         \(challengeText)
         \(achievementText)
@@ -229,6 +231,11 @@ class MenuViewController: UIViewController {
             return "目标 \(challenge.targetDistance)m · 今日最佳 \(todayBest)m"
         }
         return "目标 \(challenge.targetDistance)m · 今日最佳待刷新"
+    }
+
+    private func dailyChallengeActivitySummary(saveManager: SaveManager) -> String {
+        let activity = saveManager.dailyChallengeActivitySummary()
+        return "近7日 \(activity.playedDays)/7 天 · 连续 \(activity.streakText) 天"
     }
 
     private func achievementSummary(saveManager: SaveManager) -> String {

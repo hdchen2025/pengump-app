@@ -35,7 +35,7 @@ class LeaderboardManager {
 
         let statsLabel = UILabel()
         statsLabel.font = .systemFont(ofSize: 13, weight: .medium)
-        statsLabel.numberOfLines = 4
+        statsLabel.numberOfLines = 0
         statsLabel.textAlignment = .center
         statsLabel.textColor = UIColor(red: 0.38, green: 0.45, blue: 0.52, alpha: 1.0)
 
@@ -144,6 +144,7 @@ class LeaderboardManager {
     private func statsText(from saveManager: SaveManager) -> String {
         let bestBiome = biomeTitle(for: saveManager.highestBiomeReached)
         let titleProgress = saveManager.distanceTitleProgress()
+        let activity = saveManager.dailyChallengeActivitySummary()
         let titleText: String
         if let nextTitle = titleProgress.nextTitle {
             titleText = "称号 \(titleProgress.currentTitle.title) · 距 \(nextTitle.title) 还差 \(titleProgress.remainingDistance)m"
@@ -154,7 +155,8 @@ class LeaderboardManager {
         let challengeBest = saveManager.dailyChallengeBest(for: challenge)
         let challengeText = challengeBest > 0 ? "目标 \(challenge.targetDistance)m · 今日最佳 \(challengeBest)m" : "目标 \(challenge.targetDistance)m · 今日最佳待刷新"
         let unlockedText = "已解锁成就 \(saveManager.unlockedAchievementCount)/\(AchievementID.allCases.count)"
-        return "累计 \(saveManager.totalThrows) 次 · 完美出手 \(saveManager.perfectReleaseCount) 次 · \(bestBiome)\n\(titleText)\n今日挑战：\(challenge.title) · \(challengeText)\n\(unlockedText)"
+        let activityText = "近7日 \(activity.playedDays)/7 天 · 连续 \(activity.streakText) 天"
+        return "累计 \(saveManager.totalThrows) 次 · 完美出手 \(saveManager.perfectReleaseCount) 次 · \(bestBiome)\n\(titleText)\n今日挑战：\(challenge.title) · \(challengeText)\n\(activityText) · \(unlockedText)\n\(activity.historyText)"
     }
 
     private func biomeTitle(for highestBiome: Int) -> String {

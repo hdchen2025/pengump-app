@@ -18,7 +18,7 @@ final class SealThrowScene: SKScene {
     }
 
     private let environmentController = EnvironmentController()
-    private let dailyChallenge = DailyChallenge.today()
+    private var dailyChallenge = DailyChallenge.today()
     private var flightController = FlightController()
     private var metrics = RunMetrics()
 
@@ -323,6 +323,7 @@ final class SealThrowScene: SKScene {
     private func resetForNextThrow(showHint: Bool) {
         removeAction(forKey: "autoRestart")
         phase = .ready
+        dailyChallenge = SaveManager.shared.currentDailyChallenge()
         holdDuration = 0
         flightState = nil
         slowMotionTimer = 0
@@ -365,6 +366,7 @@ final class SealThrowScene: SKScene {
 
     private func beginSwing() {
         phase = .swinging
+        dailyChallenge = SaveManager.shared.currentDailyChallenge()
         holdDuration = 0
         releaseLabel.text = "松手出手"
         releaseLabel.fontColor = SKColor(red: 1.0, green: 0.95, blue: 0.84, alpha: 1.0)
@@ -529,6 +531,15 @@ final class SealThrowScene: SKScene {
                 CelebrationMessage(
                     text: "刷新今日最佳",
                     color: SKColor(red: 0.62, green: 0.9, blue: 1.0, alpha: 1.0)
+                )
+            )
+        }
+
+        if outcome.didStartDailyChallengeToday && outcome.dailyChallengeStreakCount > 1 {
+            extraMessages.append(
+                CelebrationMessage(
+                    text: "连续挑战 \(outcome.dailyChallengeStreakText) 天",
+                    color: SKColor(red: 0.58, green: 0.92, blue: 1.0, alpha: 1.0)
                 )
             )
         }
