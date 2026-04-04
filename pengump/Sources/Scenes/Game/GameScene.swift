@@ -910,7 +910,7 @@ class GameScene: SKScene {
 
         return hitFrame(for: penguin, expandBy: 28).contains(location)
             || hitFrame(for: slingshotBase, expandBy: 18).contains(location)
-            || hitFrame(for: cannonBarrelNode, expandBy: 18).contains(location)
+            || hitFrame(for: cannonPivotNode, expandBy: 24).contains(location)
             || pivotHitZone.contains(location)
             || muzzleHitZone.contains(location)
     }
@@ -972,8 +972,8 @@ class GameScene: SKScene {
         if flightState == .ready,
            canStartAiming(at: location) {
             flightState = .aiming
-            hasChargedShot = false
-            updateCannonAimingVisuals(showTrajectory: false)
+            hasChargedShot = true
+            updateCannonAimingVisuals(showTrajectory: true)
         }
     }
 
@@ -987,14 +987,17 @@ class GameScene: SKScene {
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard flightState == .aiming else { return }
 
+        if let touch = touches.first {
+            let location = touch.location(in: self)
+            updateCannonAim(at: location)
+        }
+
         if !hasChargedShot || aimPower < physics.minimumLaunchPowerToFire {
             aimPower = defaultAimPower()
             aimAngle = defaultAimAngle()
             hasChargedShot = true
             updateCannonAimingVisuals(showTrajectory: true)
             drawTrajectory()
-            flightState = .ready
-            return
         }
 
         startCannonLaunch()
@@ -1019,14 +1022,18 @@ class GameScene: SKScene {
         let forwardX = max(rawForwardX, 0)
         let lift = max(rawLift, 0)
         let distance = min(hypot(forwardX, lift), physics.maxPullDistance)
-        let normalizedDistance = max(0, distance - physics.minPullDistance)
-        let powerDenominator = max(1, physics.maxPullDistance - physics.minPullDistance)
-        aimPower = min(1, normalizedDistance / powerDenominator)
-        hasChargedShot = aimPower >= physics.minimumLaunchPowerToFire
+        if distance >= physics.minPullDistance {
+            let normalizedDistance = distance - physics.minPullDistance
+            let powerDenominator = max(1, physics.maxPullDistance - physics.minPullDistance)
+            aimPower = min(1, normalizedDistance / powerDenominator)
+            hasChargedShot = aimPower >= physics.minimumLaunchPowerToFire
 
-        if forwardX > 6 || lift > 6 {
-            let rawAngle = atan2(max(lift, 6), max(forwardX, 12))
-            aimAngle = min(max(rawAngle, physics.minimumLaunchAngle), physics.maximumLaunchAngle)
+            if forwardX > 6 || lift > 6 {
+                let rawAngle = atan2(max(lift, 6), max(forwardX, 12))
+                aimAngle = min(max(rawAngle, physics.minimumLaunchAngle), physics.maximumLaunchAngle)
+            }
+        } else {
+            hasChargedShot = aimPower >= physics.minimumLaunchPowerToFire
         }
 
         updateCannonAimingVisuals(showTrajectory: hasChargedShot)
