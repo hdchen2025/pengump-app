@@ -3,14 +3,14 @@ import SpriteKit
 // MARK: - 物理常量
 
 struct GamePhysics {
-    static let maxPullDistance: CGFloat = 120.0
-    static let minPullDistance: CGFloat = 20.0
-    static let launchSpeedMultiplier: CGFloat = 0.15
-    static let maxLaunchSpeed: CGFloat = 18.0
-    static let gravity: CGFloat = 0.25
-    static let airResistance: CGFloat = 0.99
+    static let maxPullDistance: CGFloat = 138.0
+    static let minPullDistance: CGFloat = 18.0
+    static let launchSpeedMultiplier: CGFloat = 0.18
+    static let maxLaunchSpeed: CGFloat = 24.0
+    static let gravity: CGFloat = 0.22
+    static let airResistance: CGFloat = 0.992
     static let rubberBandElasticity: CGFloat = 0.4
-    static let bounceDecay: CGFloat = 0.7
+    static let bounceDecay: CGFloat = 0.74
     static let stopThreshold: CGFloat = 0.5
     static let explosionRadius: CGFloat = 100.0
     static let explosionDamageRatio: CGFloat = 0.5
@@ -129,7 +129,8 @@ class IceBlockNode: SKSpriteNode {
 
     private func setupPhysics(size: CGSize) {
         physicsBody = SKPhysicsBody(rectangleOf: CGSize(width: size.width - 2, height: size.height - 2), center: .zero)
-        physicsBody?.isDynamic = true
+        physicsBody?.isDynamic = false
+        physicsBody?.affectedByGravity = false
         physicsBody?.mass = 1.0
         physicsBody?.friction = 0.5
         physicsBody?.restitution = 0.2
@@ -243,6 +244,10 @@ class GameScene: SKScene {
     private var slingshotAnchorLeft: CGPoint = .zero
     private var slingshotAnchorRight: CGPoint = .zero
     private var trailEmitter: SKEmitterNode?
+    private var battlefieldSize: CGSize = .zero
+    private var gameCamera: SKCameraNode!
+    private let hudNode = SKNode()
+    private var introPreviewRunning: Bool = false
 
     // MARK: - UI节点
 
@@ -270,17 +275,135 @@ class GameScene: SKScene {
     override func didMove(to view: SKView) {
         setupPauseNotifications()
 
+        setupBattlefieldMetrics()
         setupPhysicsWorld()
         setupSlingshot()
+        setupCamera()
         setupPenguinQueue()
         setupTrajectoryLine()
         setupUI()
         setupIceBlocks()
         setupGround()
         reloadSlingshot()
+        runIntroFlyoverIfNeeded()
     }
 
     // MARK: - 场景搭建
+
+    private func setupBattlefieldMetrics() {
+        battlefieldSize = CGSize(
+            width: max(size.width * 2.0, 900),
+            height: max(size.height * 1.45, 1100)
+        )
+    }
+
+    private func setupCamera() {
+        let cameraNode = SKCameraNode()
+        gameCamera = cameraNode
+        gameCamera.position = homeCameraFocus()
+        addChild(cameraNode)
+        camera = cameraNode
+
+        hudNode.position = .zero
+        gameCamera.addChild(hudNode)
+    }
+
+    private func clampCameraPosition(_ position: CGPoint) -> CGPoint {
+        let halfWidth = size.width / 2
+        let halfHeight = size.height / 2
+        let minX = halfWidth
+        let maxX = max(minX, battlefieldSize.width - halfWidth)
+        let minY = halfHeight
+        let maxY = max(minY, battlefieldSize.height - halfHeight)
+
+        return CGPoint(
+            x: min(max(position.x, minX), maxX),
+            y: min(max(position.y, minY), maxY)
+        )
+    }
+
+    private func homeCameraFocus() -> CGPoint {
+        let slingshotX = slingshotBase?.position.x ?? size.width * 0.18
+        let slingshotY = slingshotBase?.position.y ?? size.height * 0.22
+        return clampCameraPosition(
+            CGPoint(
+                x: slingshotX + size.width * 0.32,
+                y: slingshotY + size.height * 0.28
+            )
+        )
+    }
+
+    private func previewCameraFocus() -> CGPoint {
+        guard let firstBlock = iceBlocks.first else { return homeCameraFocus() }
+
+        var bounds = firstBlock.calculateAccumulatedFrame()
+        for block in iceBlocks.dropFirst() {
+            bounds = bounds.union(block.calculateAccumulatedFrame())
+        }
+
+        return clampCameraPosition(
+            CGPoint(
+                x: bounds.midX,
+                y: bounds.midY + size.height * 0.06
+            )
+        )
+    }
+
+    private func followCameraFocus() -> CGPoint {
+        guard let penguin = activePenguin else { return homeCameraFocus() }
+
+        let velocity = penguin.physicsBody?.velocity ?? .zero
+        let leadX = max(size.width * 0.14, min(size.width * 0.24, abs(velocity.dx) * 4.0))
+        let leadY = max(size.height * 0.08, min(size.height * 0.18, max(0, velocity.dy) * 4.0))
+
+        return clampCameraPosition(
+            CGPoint(
+                x: penguin.position.x + leadX,
+                y: max(homeCameraFocus().y, penguin.position.y + leadY)
+            )
+        )
+    }
+
+    private func updateCameraPosition() {
+        guard let gameCamera else { return }
+        guard !introPreviewRunning else { return }
+
+        let target = (activePenguin != nil && flightState == .flying) ? followCameraFocus() : homeCameraFocus()
+        gameCamera.position.x += (target.x - gameCamera.position.x) * 0.14
+        gameCamera.position.y += (target.y - gameCamera.position.y) * 0.14
+    }
+
+    private func runIntroFlyoverIfNeeded() {
+        guard let gameCamera else { return }
+
+        let home = homeCameraFocus()
+        let preview = previewCameraFocus()
+        guard abs(preview.x - home.x) > size.width * 0.22 || abs(preview.y - home.y) > size.height * 0.16 else {
+            gameCamera.position = home
+            return
+        }
+
+        let moveOut = SKAction.move(to: preview, duration: 0.85)
+        moveOut.timingMode = .easeInEaseOut
+
+        let moveBack = SKAction.move(to: home, duration: 0.8)
+        moveBack.timingMode = .easeInEaseOut
+
+        introPreviewRunning = true
+        isUserInteractionEnabled = false
+        gameCamera.position = home
+        gameCamera.run(
+            SKAction.sequence([
+                SKAction.wait(forDuration: 0.2),
+                moveOut,
+                SKAction.wait(forDuration: 0.35),
+                moveBack
+            ])
+        ) { [weak self] in
+            self?.introPreviewRunning = false
+            self?.isUserInteractionEnabled = true
+        }
+    }
 
     private func setupPhysicsWorld() {
         physicsWorld.gravity = CGVector(dx: 0, dy: -physics.gravity * 60)
@@ -288,13 +411,13 @@ class GameScene: SKScene {
     }
 
     private func setupGround() {
-        let ground = SKShapeNode(rectOf: CGSize(width: frame.width, height: 40))
+        let ground = SKShapeNode(rectOf: CGSize(width: battlefieldSize.width, height: 40))
         ground.fillColor = UIColor(red: 0.85, green: 0.92, blue: 0.95, alpha: 1.0)
         ground.strokeColor = UIColor(red: 0.7, green: 0.85, blue: 0.9, alpha: 1.0)
         ground.lineWidth = 2
-        ground.position = CGPoint(x: frame.width / 2, y: 20)
+        ground.position = CGPoint(x: battlefieldSize.width / 2, y: 20)
         ground.name = "ground"
-        ground.physicsBody = SKPhysicsBody(rectangleOf: CGSize(width: frame.width, height: 40))
+        ground.physicsBody = SKPhysicsBody(rectangleOf: CGSize(width: battlefieldSize.width, height: 40))
         ground.physicsBody?.isDynamic = false
         ground.physicsBody?.categoryBitMask = 0b1000
         addChild(ground)
@@ -376,18 +499,24 @@ class GameScene: SKScene {
     }
 
     private func setupPenguinQueue() {
-        let queueY = frame.height * 0.10
-        let startX = frame.width * 0.06
-        let spacing: CGFloat = 42
-
         for i in 0..<max(penguinsRemaining - 1, 0) {
             let penguin = createPenguinNode()
-            penguin.position = CGPoint(x: startX + CGFloat(i) * spacing, y: queueY)
+            penguin.position = reservePenguinPosition(at: i)
             penguin.alpha = 0.6
             penguin.setScale(0.85)
-            addChild(penguin)
+            hudNode.addChild(penguin)
             penguinQueue.append(penguin)
         }
+    }
+
+    private func reservePenguinPosition(at index: Int) -> CGPoint {
+        let leftEdge = -size.width / 2
+        let bottomEdge = -size.height / 2
+        let spacing: CGFloat = 42
+        return CGPoint(
+            x: leftEdge + 34 + CGFloat(index) * spacing,
+            y: bottomEdge + 70
+        )
     }
 
     private func createPenguinNode() -> SKSpriteNode {
@@ -497,13 +626,17 @@ class GameScene: SKScene {
     }
 
     private func setupUI() {
+        let leftEdge = -size.width / 2
+        let rightEdge = size.width / 2
+        let topEdge = size.height / 2
+
         let backBtn = SKShapeNode(rectOf: CGSize(width: 80, height: 32), cornerRadius: 6)
         backBtn.fillColor = UIColor(white: 0.3, alpha: 0.8)
         backBtn.strokeColor = UIColor(white: 0.5, alpha: 0.8)
         backBtn.lineWidth = 1
-        backBtn.position = CGPoint(x: 50, y: frame.height - 28)
+        backBtn.position = CGPoint(x: leftEdge + 50, y: topEdge - 28)
         backBtn.name = "backButton"
-        addChild(backBtn)
+        hudNode.addChild(backBtn)
 
         let backLabel = SKLabelNode(text: "← 返回")
         backLabel.fontSize = 13
@@ -517,40 +650,40 @@ class GameScene: SKScene {
         scoreLabel.fontColor = UIColor(red: 0.2, green: 0.2, blue: 0.3, alpha: 1.0)
         scoreLabel.fontName = "BoldSystem"
         scoreLabel.name = "scoreLabel"
-        scoreLabel.position = CGPoint(x: frame.width / 2, y: frame.height - 40)
-        addChild(scoreLabel)
+        scoreLabel.position = CGPoint(x: 0, y: topEdge - 40)
+        hudNode.addChild(scoreLabel)
 
         levelLabel = SKLabelNode(text: "第 \(currentLevel) 关")
         levelLabel.fontSize = 18
         levelLabel.fontColor = UIColor(red: 0.3, green: 0.4, blue: 0.5, alpha: 1.0)
         levelLabel.name = "levelLabel"
-        levelLabel.position = CGPoint(x: frame.width / 2, y: frame.height - 68)
-        addChild(levelLabel)
+        levelLabel.position = CGPoint(x: 0, y: topEdge - 68)
+        hudNode.addChild(levelLabel)
 
         penguinCountLabel = SKLabelNode(text: "🐧 × \(penguinsRemaining)")
         penguinCountLabel.fontSize = 20
         penguinCountLabel.name = "countLabel"
-        penguinCountLabel.position = CGPoint(x: frame.width - 55, y: frame.height - 40)
-        addChild(penguinCountLabel)
+        penguinCountLabel.position = CGPoint(x: rightEdge - 55, y: topEdge - 40)
+        hudNode.addChild(penguinCountLabel)
 
         let targetLabel = SKLabelNode(text: "目标: \(levelConfig.targetScore)")
         targetLabel.fontSize = 14
         targetLabel.fontColor = UIColor(red: 0.4, green: 0.5, blue: 0.6, alpha: 1.0)
         targetLabel.name = "targetLabel"
-        targetLabel.position = CGPoint(x: frame.width / 2, y: frame.height - 92)
-        addChild(targetLabel)
+        targetLabel.position = CGPoint(x: 0, y: topEdge - 92)
+        hudNode.addChild(targetLabel)
 
         if let hint = levelConfig.hint {
             hintLabel = SKLabelNode(text: hint)
             hintLabel.fontSize = 16
             hintLabel.fontColor = UIColor(red: 0.5, green: 0.6, blue: 0.7, alpha: 0.8)
             hintLabel.name = "hintLabel"
-            hintLabel.position = CGPoint(x: frame.width / 2, y: frame.height * 0.45)
+            hintLabel.position = CGPoint(x: 0, y: size.height * 0.10)
             hintLabel.alpha = 0
-            addChild(hintLabel)
+            hudNode.addChild(hintLabel)
 
             hintLabel.run(SKAction.sequence([
-                SKAction.wait(forDuration: 0.5),
+                SKAction.wait(forDuration: 2.2),
                 SKAction.fadeIn(withDuration: 0.5),
                 SKAction.wait(forDuration: 3.0),
                 SKAction.fadeOut(withDuration: 1.0)
@@ -563,7 +696,10 @@ class GameScene: SKScene {
         for config in levelConfig.iceBlocks {
             let blockSize: CGFloat = 48
             let block = IceBlockNode(type: config.type, size: CGSize(width: blockSize, height: blockSize))
-            let pos = CGPoint(x: frame.width * config.x, y: frame.height * config.y)
+            let pos = CGPoint(
+                x: min(battlefieldSize.width - 60, battlefieldSize.width * config.x),
+                y: min(battlefieldSize.height - 80, size.height * 0.18 + battlefieldSize.height * config.y)
+            )
             block.position = pos
             block.zPosition = 8
             addChild(block)
@@ -585,6 +721,7 @@ class GameScene: SKScene {
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = touches.first else { return }
         let location = touch.location(in: self)
+        let hudLocation = touch.location(in: hudNode)
 
         // 结果页面触摸处理
         if let overlay = resultOverlay {
@@ -611,8 +748,8 @@ class GameScene: SKScene {
         }
 
         // 返回按钮
-        if let backBtn = childNode(withName: "backButton"),
-           hitFrame(for: backBtn, expandBy: 10).contains(location) {
+        if let backBtn = hudNode.childNode(withName: "backButton"),
+           hitFrame(for: backBtn, expandBy: 10).contains(hudLocation) {
             dismiss(animated: true)
             return
         }
@@ -631,19 +768,14 @@ class GameScene: SKScene {
 
         let location = touch.location(in: self)
         let anchorPos = CGPoint(x: slingshotBase.position.x, y: slingshotAnchorLeft.y)
-        let dx = location.x - anchorPos.x
-        let dy = location.y - anchorPos.y
-        var distance = sqrt(dx * dx + dy * dy)
-        distance = min(distance, physics.maxPullDistance)
-
-        var angle = atan2(dy, dx)
-        let maxAngle: CGFloat = .pi * 0.85
-        if angle > 0 { angle = min(angle, maxAngle) }
-        else { angle = max(angle, -maxAngle) }
-
-        let pullX = anchorPos.x + cos(angle) * distance
-        let pullY = anchorPos.y + sin(angle) * distance
-        let clampedPos = CGPoint(x: pullX, y: pullY)
+        var dx = min(location.x, anchorPos.x - 12) - anchorPos.x
+        var dy = location.y - anchorPos.y
+        let rawDistance = sqrt(dx * dx + dy * dy)
+        let scale = rawDistance > physics.maxPullDistance ? physics.maxPullDistance / rawDistance : 1.0
+        dx *= scale
+        dy *= scale
+        let distance = sqrt(dx * dx + dy * dy)
+        let clampedPos = CGPoint(x: anchorPos.x + dx, y: anchorPos.y + dy)
 
         penguinNode?.position = clampedPos
         updateBandPositions(penguinPos: clampedPos)
@@ -765,11 +897,8 @@ class GameScene: SKScene {
         updatePenguinCountDisplay()
         if !penguinQueue.isEmpty {
             penguinQueue.removeFirst()
-            let queueY = frame.height * 0.10
-            let startX = frame.width * 0.06
-            let spacing: CGFloat = 42
             for (i, p) in penguinQueue.enumerated() {
-                let move = SKAction.move(to: CGPoint(x: startX + CGFloat(i) * spacing, y: queueY), duration: 0.3)
+                let move = SKAction.move(to: reservePenguinPosition(at: i), duration: 0.3)
                 move.timingMode = .easeOut
                 p.run(move)
             }
@@ -805,6 +934,8 @@ class GameScene: SKScene {
     // MARK: - 每帧更新
 
     override func update(_ currentTime: TimeInterval) {
+        defer { updateCameraPosition() }
+
         guard let penguin = activePenguin,
               let pb = penguin.physicsBody else { return }
 
@@ -822,12 +953,12 @@ class GameScene: SKScene {
             penguin.position.x = 20
             pb.velocity.dx = abs(pb.velocity.dx) * physics.bounceDecay
         }
-        if penguin.position.x > frame.width - 20 {
-            penguin.position.x = frame.width - 20
+        if penguin.position.x > battlefieldSize.width - 20 {
+            penguin.position.x = battlefieldSize.width - 20
             pb.velocity.dx = -abs(pb.velocity.dx) * physics.bounceDecay
         }
-        if penguin.position.y > frame.height - 20 {
-            penguin.position.y = frame.height - 20
+        if penguin.position.y > battlefieldSize.height - 20 {
+            penguin.position.y = battlefieldSize.height - 20
             pb.velocity.dy = -abs(pb.velocity.dy) * physics.bounceDecay
         }
 
@@ -993,10 +1124,10 @@ class GameScene: SKScene {
         let comboLabel = SKLabelNode(text: "Combo ×\(count)!")
         comboLabel.fontSize = 24
         comboLabel.fontName = "BoldSystem"
-        comboLabel.position = CGPoint(x: frame.width / 2, y: frame.height / 2 + 50)
+        comboLabel.position = CGPoint(x: 0, y: size.height * 0.12)
         comboLabel.zPosition = 60
         comboLabel.alpha = 0
-        addChild(comboLabel)
+        hudNode.addChild(comboLabel)
 
         if count >= 4 {
             comboLabel.fontColor = UIColor(red: 0.8, green: 0.3, blue: 1.0, alpha: 1.0)
@@ -1074,13 +1205,13 @@ class GameScene: SKScene {
 
         resultOverlay = SKNode()
         resultOverlay?.zPosition = 100
-        resultOverlay?.position = CGPoint(x: frame.width / 2, y: frame.height / 2)
-        addChild(resultOverlay!)
+        resultOverlay?.position = .zero
+        hudNode.addChild(resultOverlay!)
 
-        let overlayBg = SKShapeNode(rectOf: CGSize(width: frame.width, height: frame.height))
+        let overlayBg = SKShapeNode(rectOf: size)
         overlayBg.fillColor = UIColor(white: 0, alpha: 0.5)
         overlayBg.strokeColor = .clear
-        overlayBg.position = CGPoint(x: -frame.width / 2, y: -frame.height / 2)
+        overlayBg.position = .zero
         resultOverlay?.addChild(overlayBg)
 
         let titleLabel = SKLabelNode(text: success ? "🎉 通关！" : "💔 失败")
@@ -1145,7 +1276,7 @@ class GameScene: SKScene {
         if success {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { [weak self] in
                 guard let self = self else { return }
-                ParticleEffects.shared.playStarBurst(at: CGPoint(x: self.frame.width / 2, y: self.frame.height / 2), in: self)
+                ParticleEffects.shared.playStarBurst(at: self.gameCamera?.position ?? CGPoint(x: self.size.width / 2, y: self.size.height / 2), in: self)
             }
         }
         actionBtn.run(SKAction.sequence([SKAction.wait(forDuration: 0.8), fadeIn]))

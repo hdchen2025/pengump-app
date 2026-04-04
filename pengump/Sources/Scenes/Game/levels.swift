@@ -12,8 +12,8 @@ enum IceBlockType: Int, Codable {
 
 struct IceBlockConfig {
     let type: IceBlockType
-    let x: CGFloat      // 相对于屏幕宽度的比例 0.0-1.0
-    let y: CGFloat      // 相对于屏幕高度的比例 0.0-1.0
+    let x: CGFloat      // 相对于战场宽度的比例，战场本身大于可见屏幕
+    let y: CGFloat      // 相对于战场高度的比例，最终会再抬高到空中区域
 }
 
 // MARK: - 关卡配置
@@ -63,7 +63,7 @@ struct Levels {
                 IceBlockConfig(type: .normal, x: 0.65, y: 0.50),
                 IceBlockConfig(type: .normal, x: 0.79, y: 0.50)
             ],
-            hint: "拖动企鹅瞄准，松手发射！"
+            hint: "镜头会先扫到堡垒，向左后方拉拽企鹅再松手发射！"
         ),
 
         // ============================================================
