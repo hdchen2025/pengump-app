@@ -87,11 +87,11 @@ enum ThrowMechanics {
         return .nice
     }
 
-    static func release(for holdDuration: TimeInterval) -> ThrowReleaseResult {
-        release(for: orbitAngle(after: holdDuration), holdDuration: holdDuration)
+    static func release(for holdDuration: TimeInterval, challenge: DailyChallenge? = nil) -> ThrowReleaseResult {
+        release(for: orbitAngle(after: holdDuration), holdDuration: holdDuration, challenge: challenge)
     }
 
-    static func release(for orbitAngle: CGFloat, holdDuration: TimeInterval) -> ThrowReleaseResult {
+    static func release(for orbitAngle: CGFloat, holdDuration: TimeInterval, challenge: DailyChallenge? = nil) -> ThrowReleaseResult {
         let direction = tangentialDirection(for: orbitAngle)
         let tangentialSpeed = linearSpeed(for: holdDuration)
         let judgement = releaseJudgement(
@@ -112,7 +112,15 @@ enum ThrowMechanics {
             multiplier = 1.05
         }
 
-        let launchSpeed = max(960, (880 + tangentialSpeed * 0.98) * multiplier)
+        let challengeMultiplier: CGFloat
+        switch challenge?.modifier {
+        case .tailwind:
+            challengeMultiplier = 1.12
+        default:
+            challengeMultiplier = 1.0
+        }
+
+        let launchSpeed = max(960, (880 + tangentialSpeed * 0.98) * multiplier * challengeMultiplier)
         return ThrowReleaseResult(
             velocity: CGVector(dx: direction.dx * launchSpeed, dy: direction.dy * launchSpeed),
             judgement: judgement

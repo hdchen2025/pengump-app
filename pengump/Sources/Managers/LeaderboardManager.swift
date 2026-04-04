@@ -35,7 +35,7 @@ class LeaderboardManager {
 
         let statsLabel = UILabel()
         statsLabel.font = .systemFont(ofSize: 13, weight: .medium)
-        statsLabel.numberOfLines = 2
+        statsLabel.numberOfLines = 4
         statsLabel.textAlignment = .center
         statsLabel.textColor = UIColor(red: 0.38, green: 0.45, blue: 0.52, alpha: 1.0)
 
@@ -149,7 +149,11 @@ class LeaderboardManager {
         } else {
             milestoneText = "已冲破基础里程碑"
         }
-        return "累计 \(saveManager.totalThrows) 次 · 完美出手 \(saveManager.perfectReleaseCount) 次\n最远冲到 \(bestBiome) · \(milestoneText)"
+        let challenge = saveManager.currentDailyChallenge()
+        let challengeBest = saveManager.dailyChallengeBest(for: challenge)
+        let challengeText = challengeBest > 0 ? "目标 \(challenge.targetDistance)m · 今日最佳 \(challengeBest)m" : "目标 \(challenge.targetDistance)m · 今日最佳待刷新"
+        let unlockedText = "已解锁成就 \(saveManager.unlockedAchievementCount)/\(AchievementID.allCases.count)"
+        return "累计 \(saveManager.totalThrows) 次 · 完美出手 \(saveManager.perfectReleaseCount) 次\n最远冲到 \(bestBiome) · \(milestoneText)\n今日挑战：\(challenge.title) · \(challengeText)\n\(unlockedText)"
     }
 
     private func biomeTitle(for highestBiome: Int) -> String {

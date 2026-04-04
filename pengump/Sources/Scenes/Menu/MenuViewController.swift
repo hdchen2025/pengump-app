@@ -17,7 +17,7 @@ class MenuViewController: UIViewController {
 
     private lazy var statusLabel: UILabel = {
         let label = UILabel()
-        label.numberOfLines = 4
+        label.numberOfLines = 7
         label.font = .systemFont(ofSize: 16, weight: .medium)
         label.textColor = UIColor(red: 0.31, green: 0.39, blue: 0.49, alpha: 1.0)
         label.textAlignment = .center
@@ -174,6 +174,9 @@ class MenuViewController: UIViewController {
         let totalThrows = saveManager.totalThrows
         let latestRun = saveManager.latestDistanceRecord
         let milestoneText = milestoneSummary(for: bestDistance)
+        let challenge = saveManager.currentDailyChallenge()
+        let challengeText = dailyChallengeSummary(challenge: challenge, saveManager: saveManager)
+        let achievementText = achievementSummary(saveManager: saveManager)
 
         startButton.setTitle(totalThrows > 0 ? "再来远投" : "开始远投", for: .normal)
 
@@ -182,6 +185,9 @@ class MenuViewController: UIViewController {
             全局最佳 \(bestDistance)m
             最近一投 \(latestRun.distance)m · \(releaseSummary(for: latestRun))
             累计远投 \(totalThrows) 次
+            今日挑战：\(challenge.title)
+            \(challengeText)
+            \(achievementText)
             \(milestoneText)
             """
             return
@@ -189,6 +195,9 @@ class MenuViewController: UIViewController {
 
         statusLabel.text = """
         目标先冲过 \(DistanceMilestones.all.first ?? 100)m
+        今日挑战：\(challenge.title)
+        \(challengeText)
+        \(achievementText)
         自动结算后立刻下一投
         \(milestoneText)
         """
@@ -219,5 +228,20 @@ class MenuViewController: UIViewController {
             return "下一里程碑 \(next)m · 还差 \(max(0, next - bestDistance))m"
         }
         return "已冲破所有基础里程碑"
+    }
+
+    private func dailyChallengeSummary(challenge: DailyChallenge, saveManager: SaveManager) -> String {
+        let todayBest = saveManager.dailyChallengeBest(for: challenge)
+        if todayBest > 0 {
+            return "目标 \(challenge.targetDistance)m · 今日最佳 \(todayBest)m"
+        }
+        return "目标 \(challenge.targetDistance)m · 今日最佳待刷新"
+    }
+
+    private func achievementSummary(saveManager: SaveManager) -> String {
+        if let progress = saveManager.nextAchievementProgressSummary() {
+            return "下一成就：\(progress.title) \(progress.progressText)"
+        }
+        return "成就已全部解锁"
     }
 }

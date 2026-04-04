@@ -53,13 +53,20 @@ struct FlightController {
         body.groundedDuration = 0
     }
 
-    mutating func step(body: inout FlightBody, dt: CGFloat, groundHeight: CGFloat, surface: GroundSurface) -> FlightStepResult {
+    mutating func step(body: inout FlightBody, dt: CGFloat, groundHeight: CGFloat, surface: GroundSurface, challenge: DailyChallenge? = nil) -> FlightStepResult {
         var result = FlightStepResult()
         body.elapsedTime += TimeInterval(dt)
+        let gravityMultiplier: CGFloat
+        switch challenge?.modifier {
+        case .moonGravity:
+            gravityMultiplier = 0.74
+        default:
+            gravityMultiplier = 1.0
+        }
 
         if !body.isGrounded {
             body.airTime += TimeInterval(dt)
-            body.velocity.dy -= gravity * dt
+            body.velocity.dy -= gravity * gravityMultiplier * dt
             body.velocity.dx *= airDrag
             body.velocity.dy *= airDrag
         } else {

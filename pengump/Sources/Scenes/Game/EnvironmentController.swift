@@ -103,18 +103,21 @@ final class EnvironmentController {
         return GroundSurface(bounce: profile.bounce, friction: profile.friction)
     }
 
-    func features(in range: ClosedRange<CGFloat>) -> [EnvironmentFeature] {
+    func features(in range: ClosedRange<CGFloat>, challenge: DailyChallenge? = nil) -> [EnvironmentFeature] {
         let chunkSize: CGFloat = 240
         let startChunk = max(1, Int(floor(range.lowerBound / chunkSize)) - 1)
         let endChunk = Int(ceil(range.upperBound / chunkSize)) + 1
         var features: [EnvironmentFeature] = []
+        let fishFrequency = challenge?.modifier == .fishFestival ? 2 : 3
+        let springFrequency = challenge?.modifier == .springFestival ? 2 : 4
+        let springStartBiome = challenge?.modifier == .springFestival ? 0 : 1
 
         for chunk in startChunk...endChunk {
             let baseX = CGFloat(chunk) * chunkSize
             let distance = max(0, (baseX - 170) * 0.42)
             let biome = biomeIndex(for: distance)
 
-            if chunk >= 2 && chunk % 3 == 2 {
+            if chunk >= 2 && chunk % fishFrequency == fishFrequency - 1 {
                 features.append(
                     EnvironmentFeature(
                         id: "fish-\(chunk)",
@@ -124,7 +127,7 @@ final class EnvironmentController {
                 )
             }
 
-            if biome >= 1 && chunk % 4 == 2 {
+            if biome >= springStartBiome && chunk % springFrequency == springFrequency - 2 {
                 features.append(
                     EnvironmentFeature(
                         id: "spring-\(chunk)",

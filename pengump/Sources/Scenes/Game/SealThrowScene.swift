@@ -5,6 +5,11 @@ final class SealThrowScene: SKScene {
 
     var onExit: (() -> Void)?
 
+    private struct CelebrationMessage {
+        let text: String
+        let color: SKColor
+    }
+
     private enum Phase {
         case ready
         case swinging
@@ -13,6 +18,7 @@ final class SealThrowScene: SKScene {
     }
 
     private let environmentController = EnvironmentController()
+    private let dailyChallenge = DailyChallenge.today()
     private var flightController = FlightController()
     private var metrics = RunMetrics()
 
@@ -352,6 +358,9 @@ final class SealThrowScene: SKScene {
         updateArmPath(to: penguinNode.position)
         updateSpeedLines(forwardSpeed: 0, dt: 0)
         updateFeatureNodes(aroundX: cameraNode.position.x)
+        if showHint {
+            showFloatingMessage("今日挑战：\(dailyChallenge.title) · \(dailyChallenge.targetDistance)m", color: profile.accentColor, duration: 0.8)
+        }
     }
 
     private func beginSwing() {
@@ -376,7 +385,7 @@ final class SealThrowScene: SKScene {
     private func releasePenguin() {
         guard phase == .swinging else { return }
 
-        let launch = ThrowMechanics.release(for: holdDuration)
+        let launch = ThrowMechanics.release(for: holdDuration, challenge: dailyChallenge)
         metrics.beginRun(bestDistance: CGFloat(SaveManager.shared.bestDistance))
         metrics.releaseLabel = launch.judgement.rawValue
         releaseLabel.text = launch.judgement.rawValue
@@ -432,7 +441,8 @@ final class SealThrowScene: SKScene {
             body: &state,
             dt: dt,
             groundHeight: groundHeight,
-            surface: environmentController.surface(at: metrics.currentDistance)
+            surface: environmentController.surface(at: metrics.currentDistance),
+            challenge: dailyChallenge
         )
 
         if let triggeredFeature = triggerFeatureIfNeeded(on: &state, previousPosition: previousPosition) {
@@ -487,14 +497,18 @@ final class SealThrowScene: SKScene {
 
         phase = .cooldown
         let didBreakRecord = metrics.didBeatBest
-        let distanceText = "\(Int(metrics.currentDistance.rounded()))m"
+        let roundedDistance = Int(metrics.currentDistance.rounded())
+        let distanceText = "\(roundedDistance)m"
         let message = didBreakRecord ? "新纪录 \(distanceText)" : "本次 \(distanceText)"
         showFloatingMessage(message, color: didBreakRecord ? SKColor(red: 1.0, green: 0.82, blue: 0.42, alpha: 1.0) : .white, duration: 0.9)
 
-        SaveManager.shared.recordDistanceRun(
-            distance: Int(metrics.currentDistance.rounded()),
+        let outcome = SaveManager.shared.recordDistanceRun(
+            distance: roundedDistance,
             perfectRelease: metrics.releaseLabel == ReleaseJudgement.perfect.rawValue,
-            highestBiome: metrics.highestBiomeIndex
+            highestBiome: metrics.highestBiomeIndex,
+            interactionCount: metrics.interactionCount,
+            airTime: metrics.airTime,
+            challenge: dailyChallenge
         )
 
         if didBreakRecord {
@@ -502,9 +516,40 @@ final class SealThrowScene: SKScene {
             AudioManager.shared.playGameWinSound()
         }
 
+        var extraMessages: [CelebrationMessage] = []
+        if outcome.didCompleteDailyChallenge {
+            extraMessages.append(
+                CelebrationMessage(
+                    text: "挑战达成 \(outcome.challenge.targetDistance)m",
+                    color: SKColor(red: 0.48, green: 0.94, blue: 0.86, alpha: 1.0)
+                )
+            )
+        } else if outcome.didSetDailyChallengeRecord {
+            extraMessages.append(
+                CelebrationMessage(
+                    text: "刷新今日最佳",
+                    color: SKColor(red: 0.62, green: 0.9, blue: 1.0, alpha: 1.0)
+                )
+            )
+        }
+
+        for achievement in outcome.newlyUnlockedAchievements {
+            extraMessages.append(
+                CelebrationMessage(
+                    text: "成就解锁：\(achievement.title)",
+                    color: SKColor(red: 1.0, green: 0.88, blue: 0.48, alpha: 1.0)
+                )
+            )
+        }
+
+        let extraDelay = scheduleCelebrationMessages(extraMessages)
+        if !extraMessages.isEmpty {
+            ParticleEffects.shared.playStarBurst(at: penguinNode.position, in: self)
+        }
+
         run(
             SKAction.sequence([
-                SKAction.wait(forDuration: 1.0),
+                SKAction.wait(forDuration: 1.0 + extraDelay),
                 SKAction.run { [weak self] in
                     self?.resetForNextThrow(showHint: false)
                 }
@@ -608,7 +653,7 @@ final class SealThrowScene: SKScene {
     }
 
     private func updateFeatureNodes(aroundX centerX: CGFloat) {
-        let features = environmentController.features(in: featureRange(aroundX: centerX))
+        let features = environmentController.features(in: featureRange(aroundX: centerX), challenge: dailyChallenge)
         let visibleIDs = Set(features.map(\.id))
 
         let staleIDs = renderedFeatures.keys.filter { !visibleIDs.contains($0) || triggeredFeatureIDs.contains($0) }
@@ -627,7 +672,7 @@ final class SealThrowScene: SKScene {
     private func triggerFeatureIfNeeded(on body: inout FlightBody, previousPosition: CGPoint) -> EnvironmentFeature? {
         let lowerBound = min(previousPosition.x, body.position.x) - 40
         let upperBound = max(previousPosition.x, body.position.x) + 40
-        let nearbyFeatures = environmentController.features(in: lowerBound...upperBound)
+        let nearbyFeatures = environmentController.features(in: lowerBound...upperBound, challenge: dailyChallenge)
 
         for feature in nearbyFeatures where !triggeredFeatureIDs.contains(feature.id) {
             let anchor = featureAnchorPoint(for: feature)
@@ -787,6 +832,24 @@ final class SealThrowScene: SKScene {
                 SKAction.fadeOut(withDuration: 0.25)
             ])
         )
+    }
+
+    private func scheduleCelebrationMessages(_ messages: [CelebrationMessage]) -> TimeInterval {
+        guard !messages.isEmpty else { return 0 }
+
+        for (index, item) in messages.enumerated() {
+            let delay = 0.52 + Double(index) * 0.64
+            run(
+                SKAction.sequence([
+                    SKAction.wait(forDuration: delay),
+                    SKAction.run { [weak self] in
+                        self?.showFloatingMessage(item.text, color: item.color, duration: 0.55)
+                    }
+                ])
+            )
+        }
+
+        return 0.52 + Double(messages.count) * 0.64
     }
 
     private func createPenguinNode() -> SKNode {
