@@ -9,6 +9,11 @@
 /* Begin PBXBuildFile section */
 		0082A0960CD49944FFFD3A33 /* SaveManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E73AF44A123701885864905 /* SaveManager.swift */; };
 		059DE949BD329035562996B8 /* LeaderboardManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DA3747C4909F0A9246401B5 /* LeaderboardManager.swift */; };
+		0AA100000000000000000001 /* SealThrowScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AA200000000000000000001 /* SealThrowScene.swift */; };
+		0AA100000000000000000002 /* ThrowMechanics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AA200000000000000000002 /* ThrowMechanics.swift */; };
+		0AA100000000000000000003 /* FlightController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AA200000000000000000003 /* FlightController.swift */; };
+		0AA100000000000000000004 /* EnvironmentController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AA200000000000000000004 /* EnvironmentController.swift */; };
+		0AA100000000000000000005 /* RunMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AA200000000000000000005 /* RunMetrics.swift */; };
 		123763C222A19D6E00DCD065 /* Contents.json in Resources */ = {isa = PBXBuildFile; fileRef = 2B6D7DD25EABF6F2133F8426 /* Contents.json */; };
 		22BDBC86B64FBA8C0EAFC136 /* AudioManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95BF8CA55F58D1D17F04F6D3 /* AudioManager.swift */; };
 		2D8EAF0705B7DEFB43932C38 /* SettingsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D29554102393D8967B5DF07F /* SettingsViewController.swift */; };
@@ -31,6 +36,11 @@
 
 /* Begin PBXFileReference section */
 		02F811C1E9ECC6D90A984090 /* Pods-pengump.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-pengump.release.xcconfig"; path = "Target Support Files/Pods-pengump/Pods-pengump.release.xcconfig"; sourceTree = "<group>"; };
+		0AA200000000000000000001 /* SealThrowScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SealThrowScene.swift; sourceTree = "<group>"; };
+		0AA200000000000000000002 /* ThrowMechanics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThrowMechanics.swift; sourceTree = "<group>"; };
+		0AA200000000000000000003 /* FlightController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlightController.swift; sourceTree = "<group>"; };
+		0AA200000000000000000004 /* EnvironmentController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentController.swift; sourceTree = "<group>"; };
+		0AA200000000000000000005 /* RunMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunMetrics.swift; sourceTree = "<group>"; };
 		0F6D7CCC6D63706FB25AC9F0 /* ItemSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemSystem.swift; sourceTree = "<group>"; };
 		2354C73780C16A20E0B4E9CD /* GameScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameScene.swift; sourceTree = "<group>"; };
 		2707934CB301A803AC2AE2F4 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
@@ -147,6 +157,11 @@
 		73CF708556B93F2C12782810 /* Game */ = {
 			isa = PBXGroup;
 			children = (
+				0AA200000000000000000001 /* SealThrowScene.swift */,
+				0AA200000000000000000002 /* ThrowMechanics.swift */,
+				0AA200000000000000000003 /* FlightController.swift */,
+				0AA200000000000000000004 /* EnvironmentController.swift */,
+				0AA200000000000000000005 /* RunMetrics.swift */,
 				2354C73780C16A20E0B4E9CD /* GameScene.swift */,
 				B29CEC8BB408B67544854A99 /* GameViewController.swift */,
 				75590B268D17DA35135A9E9C /* levels.swift */,
@@ -408,6 +423,8 @@
 				399155474F11EEE417613E5E /* AdManager.swift in Sources */,
 				BBFFFA71312BFF790924E99D /* AppDelegate.swift in Sources */,
 				22BDBC86B64FBA8C0EAFC136 /* AudioManager.swift in Sources */,
+				0AA100000000000000000004 /* EnvironmentController.swift in Sources */,
+				0AA100000000000000000003 /* FlightController.swift in Sources */,
 				A9563C694478EEA349D66C87 /* GameScene.swift in Sources */,
 				C14CC4F104802C21C004DBAD /* GameViewController.swift in Sources */,
 				ECD5A529E1730C59CB3A0C50 /* ItemSystem.swift in Sources */,
@@ -416,10 +433,13 @@
 				FF633B37A821AAFD409268E7 /* MenuViewController.swift in Sources */,
 				BEDE5EE9FF128232A3E83DB9 /* ParticleEffects.swift in Sources */,
 				79E7BCD8E980E080227F78FC /* PrivacyPolicyViewController.swift in Sources */,
+				0AA100000000000000000005 /* RunMetrics.swift in Sources */,
 				0082A0960CD49944FFFD3A33 /* SaveManager.swift in Sources */,
 				735ADD0B51576C956F3D6CF4 /* SceneDelegate.swift in Sources */,
+				0AA100000000000000000001 /* SealThrowScene.swift in Sources */,
 				2D8EAF0705B7DEFB43932C38 /* SettingsViewController.swift in Sources */,
 				F99E8BC53EA0C2D739FBC910 /* StaminaSystem.swift in Sources */,
+				0AA100000000000000000002 /* ThrowMechanics.swift in Sources */,
 				4C0E82B2961D9BA777BFF25A /* levels.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

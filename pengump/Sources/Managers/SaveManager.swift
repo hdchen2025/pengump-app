@@ -9,14 +9,22 @@ struct ScoreRecord: Codable, Equatable {
     let date: Date
 }
 
+struct DistanceRecord: Codable, Equatable {
+    let distance: Int
+    let date: Date
+    let perfectRelease: Bool
+    let highestBiome: Int
+}
+
 // MARK: - SaveManager
 
 class SaveManager {
     static let shared = SaveManager()
 
     private let defaults = UserDefaults.standard
-    private let currentSaveDataVersion = 2
+    private let currentSaveDataVersion = 3
     private let maxStaminaValue = 30
+    private let maxStoredDistanceRecords = 60
 
     // UserDefaults keys
     private enum Keys {
@@ -27,12 +35,25 @@ class SaveManager {
         static let stamina = "stamina"
         static let lastStaminaUpdate = "last_stamina_update"
         static let hasRecord = "has_record"
+        static let bestDistance = "best_distance"
+        static let distanceRecords = "distance_records"
+        static let totalThrows = "total_throws"
+        static let perfectReleaseCount = "perfect_release_count"
+        static let highestBiomeReached = "highest_biome_reached"
     }
 
     // MARK: - 数据属性
 
     var highestScores: [Int: ScoreRecord] = [:]  // 每关最高分
     var unlockedLevels: Int = 1                   // 已解锁最高关卡
+    var bestDistance: Int = 0
+    var distanceRecords: [DistanceRecord] = []
+    var totalThrows: Int = 0
+    var perfectReleaseCount: Int = 0
+    var highestBiomeReached: Int = 0
+    var latestDistanceRecord: DistanceRecord? {
+        distanceRecords.last
+    }
 
     // 兼容旧经济字段（免费版主流程不依赖）
     var coins: Int = 0
@@ -65,6 +86,26 @@ class SaveManager {
         coins = defaults.integer(forKey: Keys.coins)
         let persistedStamina = defaults.integer(forKey: Keys.stamina)
         stamina = persistedStamina > 0 ? min(persistedStamina, maxStaminaValue) : maxStaminaValue
+
+        bestDistance = defaults.integer(forKey: Keys.bestDistance)
+        totalThrows = defaults.integer(forKey: Keys.totalThrows)
+        perfectReleaseCount = defaults.integer(forKey: Keys.perfectReleaseCount)
+        highestBiomeReached = defaults.integer(forKey: Keys.highestBiomeReached)
+
+        if let data = defaults.data(forKey: Keys.distanceRecords),
+           let decoded = try? JSONDecoder().decode([DistanceRecord].self, from: data) {
+            distanceRecords = decoded
+        } else {
+            distanceRecords = []
+        }
+        if distanceRecords.count > maxStoredDistanceRecords {
+            distanceRecords = Array(distanceRecords.suffix(maxStoredDistanceRecords))
+        }
+
+        bestDistance = max(bestDistance, distanceRecords.map(\.distance).max() ?? 0)
+        totalThrows = max(totalThrows, distanceRecords.count)
+        perfectReleaseCount = max(perfectReleaseCount, distanceRecords.filter(\.perfectRelease).count)
+        highestBiomeReached = max(highestBiomeReached, distanceRecords.map(\.highestBiome).max() ?? 0)
 
         if let date = defaults.object(forKey: Keys.lastStaminaUpdate) as? Date {
             lastStaminaUpdate = date
@@ -103,6 +144,14 @@ class SaveManager {
         defaults.set(coins, forKey: Keys.coins)
         defaults.set(stamina, forKey: Keys.stamina)
         defaults.set(lastStaminaUpdate, forKey: Keys.lastStaminaUpdate)
+        defaults.set(bestDistance, forKey: Keys.bestDistance)
+        defaults.set(totalThrows, forKey: Keys.totalThrows)
+        defaults.set(perfectReleaseCount, forKey: Keys.perfectReleaseCount)
+        defaults.set(highestBiomeReached, forKey: Keys.highestBiomeReached)
+
+        if let data = try? JSONEncoder().encode(distanceRecords) {
+            defaults.set(data, forKey: Keys.distanceRecords)
+        }
 
         defaults.set(true, forKey: Keys.hasRecord)
         defaults.set(currentSaveDataVersion, forKey: Keys.saveDataVersion)
@@ -125,6 +174,11 @@ class SaveManager {
             || defaults.object(forKey: Keys.coins) != nil
             || defaults.object(forKey: Keys.stamina) != nil
             || defaults.object(forKey: Keys.lastStaminaUpdate) != nil
+            || defaults.object(forKey: Keys.bestDistance) != nil
+            || defaults.object(forKey: Keys.distanceRecords) != nil
+            || defaults.object(forKey: Keys.totalThrows) != nil
+            || defaults.object(forKey: Keys.perfectReleaseCount) != nil
+            || defaults.object(forKey: Keys.highestBiomeReached) != nil
     }
 
     // MARK: - 关卡分数操作
@@ -218,5 +272,46 @@ class SaveManager {
         Array(highestScores.values
             .sorted { $0.score > $1.score }
             .prefix(limit))
+    }
+
+    func recordDistanceRun(distance: Int, perfectRelease: Bool, highestBiome: Int) {
+        let record = DistanceRecord(
+            distance: max(0, distance),
+            date: Date(),
+            perfectRelease: perfectRelease,
+            highestBiome: max(0, highestBiome)
+        )
+
+        distanceRecords.append(record)
+        if distanceRecords.count > maxStoredDistanceRecords {
+            distanceRecords.removeFirst(distanceRecords.count - maxStoredDistanceRecords)
+        }
+
+        bestDistance = max(bestDistance, record.distance)
+        totalThrows += 1
+        if perfectRelease {
+            perfectReleaseCount += 1
+        }
+        self.highestBiomeReached = max(self.highestBiomeReached, record.highestBiome)
+        save()
+    }
+
+    func registerDistanceRun(distance: Int, perfectRelease: Bool, highestBiome: Int) {
+        recordDistanceRun(distance: distance, perfectRelease: perfectRelease, highestBiome: highestBiome)
+    }
+
+    func topDistanceRecords(limit: Int = 10) -> [DistanceRecord] {
+        Array(distanceRecords
+            .sorted { lhs, rhs in
+                if lhs.distance == rhs.distance {
+                    return lhs.date > rhs.date
+                }
+                return lhs.distance > rhs.distance
+            }
+            .prefix(limit))
+    }
+
+    func recentDistanceRecords(limit: Int = 10) -> [DistanceRecord] {
+        Array(distanceRecords.suffix(limit).reversed())
     }
 }

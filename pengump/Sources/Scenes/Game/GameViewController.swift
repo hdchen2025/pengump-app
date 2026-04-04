@@ -4,10 +4,14 @@ import SpriteKit
 /// 游戏主界面（SpriteKit 场景）
 class GameViewController: UIViewController {
 
-    private let level: Int
-    private var scene: GameScene!
+    private let level: Int?
+    private var scene: SealThrowScene!
 
-    init(level: Int) {
+    convenience init() {
+        self.init(level: nil)
+    }
+
+    init(level: Int?) {
         self.level = level
         super.init(nibName: nil, bundle: nil)
     }
@@ -23,7 +27,10 @@ class GameViewController: UIViewController {
         AudioManager.shared.playMusic(.game)
 
         // 创建 SpriteKit 场景
-        scene = GameScene(level: level)
+        scene = SealThrowScene()
+        scene.onExit = { [weak self] in
+            self?.dismiss(animated: true)
+        }
         scene.scaleMode = .resizeFill
         scene.size = view.bounds.size
 

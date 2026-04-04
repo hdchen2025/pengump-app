@@ -8,18 +8,27 @@ class MenuViewController: UIViewController {
 
     private lazy var logoLabel: UILabel = {
         let label = UILabel()
-        label.text = "🐧 打企鹅"
+        label.text = "🦭 海豹甩企鹅"
         label.font = .systemFont(ofSize: 48, weight: .bold)
-        label.textColor = UIColor(red: 0.2, green: 0.5, blue: 0.9, alpha: 1.0)
+        label.textColor = UIColor(red: 0.14, green: 0.32, blue: 0.58, alpha: 1.0)
+        label.textAlignment = .center
+        return label
+    }()
+
+    private lazy var statusLabel: UILabel = {
+        let label = UILabel()
+        label.numberOfLines = 3
+        label.font = .systemFont(ofSize: 16, weight: .medium)
+        label.textColor = UIColor(red: 0.31, green: 0.39, blue: 0.49, alpha: 1.0)
         label.textAlignment = .center
         return label
     }()
 
     private lazy var startButton: UIButton = {
         let button = UIButton(type: .system)
-        button.setTitle("开始游戏", for: .normal)
+        button.setTitle("开始首投", for: .normal)
         button.titleLabel?.font = .systemFont(ofSize: 24, weight: .semibold)
-        button.backgroundColor = UIColor(red: 0.2, green: 0.5, blue: 0.9, alpha: 1.0)
+        button.backgroundColor = UIColor(red: 0.16, green: 0.46, blue: 0.78, alpha: 1.0)
         button.setTitleColor(.white, for: .normal)
         button.layer.cornerRadius = 12
         button.addTarget(self, action: #selector(startGameTapped), for: .touchUpInside)
@@ -28,9 +37,9 @@ class MenuViewController: UIViewController {
 
     private lazy var leaderboardButton: UIButton = {
         let button = UIButton(type: .system)
-        button.setTitle("🏆 排行榜", for: .normal)
+        button.setTitle("🏁 纪录", for: .normal)
         button.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
-        button.backgroundColor = UIColor(red: 0.9, green: 0.7, blue: 0.1, alpha: 1.0)
+        button.backgroundColor = UIColor(red: 0.95, green: 0.63, blue: 0.15, alpha: 1.0)
         button.setTitleColor(.white, for: .normal)
         button.layer.cornerRadius = 12
         button.addTarget(self, action: #selector(leaderboardTapped), for: .touchUpInside)
@@ -66,6 +75,7 @@ class MenuViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         AudioManager.shared.playMusic(.menu)
+        refreshStatus()
     }
 
     // MARK: - Setup
@@ -74,6 +84,7 @@ class MenuViewController: UIViewController {
         view.backgroundColor = UIColor(red: 0.85, green: 0.95, blue: 1.0, alpha: 1.0)
 
         view.addSubview(logoLabel)
+        view.addSubview(statusLabel)
         view.addSubview(startButton)
         view.addSubview(leaderboardButton)
         view.addSubview(settingsButton)
@@ -83,9 +94,15 @@ class MenuViewController: UIViewController {
             make.centerY.equalToSuperview().offset(-120)
         }
 
+        statusLabel.snp.makeConstraints { make in
+            make.centerX.equalToSuperview()
+            make.top.equalTo(logoLabel.snp.bottom).offset(14)
+            make.left.right.equalToSuperview().inset(36)
+        }
+
         startButton.snp.makeConstraints { make in
             make.centerX.equalToSuperview()
-            make.top.equalTo(logoLabel.snp.bottom).offset(40)
+            make.top.equalTo(statusLabel.snp.bottom).offset(28)
             make.width.equalTo(220)
             make.height.equalTo(56)
         }
@@ -106,12 +123,14 @@ class MenuViewController: UIViewController {
     // MARK: - Actions
 
     @objc private func startGameTapped() {
-        let levelSelectVC = LevelSelectViewController()
-        levelSelectVC.modalPresentationStyle = .fullScreen
-        present(levelSelectVC, animated: true)
+        AudioManager.shared.playButtonTapSound()
+        let gameVC = GameViewController()
+        gameVC.modalPresentationStyle = .fullScreen
+        present(gameVC, animated: true)
     }
 
     @objc private func leaderboardTapped() {
+        AudioManager.shared.playButtonTapSound()
         showLeaderboardPanel()
     }
 
@@ -125,6 +144,7 @@ class MenuViewController: UIViewController {
     // MARK: - 弹窗
 
     private func showLeaderboardPanel() {
+        guard view.viewWithTag(1000) == nil else { return }
         let panel = LeaderboardManager.shared.createLeaderboardPanel { [weak self] in
             self?.dismissLeaderboardPanel()
         }
@@ -139,12 +159,55 @@ class MenuViewController: UIViewController {
     }
 
     private func dismissLeaderboardPanel() {
-        if let panel = view.subviews.first(where: { $0.tag == 1001 || ($0.backgroundColor == UIColor.black.withAlphaComponent(0.5) && $0.subviews.contains(where: { $0.tag == 1001 })) }) {
+        if let panel = view.viewWithTag(1000) {
             UIView.animate(withDuration: 0.2, animations: {
                 panel.alpha = 0
             }) { _ in
                 panel.removeFromSuperview()
             }
+        }
+    }
+
+    private func refreshStatus() {
+        let saveManager = SaveManager.shared
+        let bestDistance = saveManager.bestDistance
+        let totalThrows = saveManager.totalThrows
+        let latestRun = saveManager.latestDistanceRecord
+
+        startButton.setTitle(totalThrows > 0 ? "再来一投" : "开始首投", for: .normal)
+
+        if let latestRun {
+            statusLabel.text = """
+            全局最佳 \(bestDistance)m
+            最近一投 \(latestRun.distance)m · \(releaseSummary(for: latestRun))
+            累计远投 \(totalThrows) 次
+            """
+            return
+        }
+
+        statusLabel.text = """
+        直接挑战最远距离
+        短局结算后立刻开下一投
+        """
+    }
+
+    private func releaseSummary(for record: DistanceRecord) -> String {
+        if record.perfectRelease {
+            return "完美出手"
+        }
+        return biomeTitle(for: record.highestBiome)
+    }
+
+    private func biomeTitle(for highestBiome: Int) -> String {
+        switch highestBiome {
+        case 3:
+            return "冲进传说区"
+        case 2:
+            return "冲到极光区"
+        case 1:
+            return "冲到裂谷区"
+        default:
+            return "雪地起跑"
         }
     }
 }
