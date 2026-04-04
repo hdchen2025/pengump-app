@@ -181,6 +181,26 @@ class MenuViewController: UIViewController {
 
         startButton.setTitle(totalThrows > 0 ? "再来远投" : "开始远投", for: .normal)
 
+        if totalThrows == 0 {
+            statusLabel.text = """
+            按住开始抡臂，松手就能把企鹅甩出去
+            飞行中还能再点一次扑腾续命
+            首局会自动续投，先冲过 \(DistanceMilestones.all.first ?? 100)m
+            """
+            return
+        }
+
+        if totalThrows < 3, let latestRun {
+            let followUpTip = totalThrows == 1 ? "第二把试试空中扑腾，把距离再送远一点" : "第三把开始找稳定甜区，先多打出“不错”"
+            statusLabel.text = """
+            全局最佳 \(bestDistance)m
+            最近一投 \(latestRun.distance)m · \(releaseSummary(for: latestRun))
+            \(followUpTip)
+            局内支持暂停 / 重开 / 自动续投
+            """
+            return
+        }
+
         if let latestRun {
             statusLabel.text = """
             全局最佳 \(bestDistance)m

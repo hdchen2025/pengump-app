@@ -32,6 +32,7 @@ enum ThrowMechanics {
     static let restAngle: CGFloat = -.pi * 0.58
     static let startAngle: CGFloat = -.pi * 0.82
     static let maxHoldDuration: TimeInterval = 2.2
+    static let onboardingThrowLimit = 3
 
     static func angularSpeed(for holdDuration: TimeInterval) -> CGFloat {
         let clamped = min(max(holdDuration, 0), maxHoldDuration)
@@ -68,15 +69,26 @@ enum ThrowMechanics {
         return CGVector(dx: raw.dx / length, dy: raw.dy / length)
     }
 
-    static func releaseJudgement(for directionAngle: CGFloat, speed: CGFloat, holdDuration: TimeInterval) -> ReleaseJudgement {
+    static func releaseJudgement(
+        for directionAngle: CGFloat,
+        speed: CGFloat,
+        holdDuration: TimeInterval,
+        isOnboarding: Bool = false
+    ) -> ReleaseJudgement {
         let degrees = directionAngle * 180 / .pi
         let angularVelocity = speed / orbitRadius
 
-        if angularVelocity < 4.0 || degrees < 16 {
+        let earlyVelocityThreshold: CGFloat = isOnboarding ? 3.45 : 4.0
+        let earlyAngleThreshold: CGFloat = isOnboarding ? 12 : 16
+        let overVelocityThreshold: CGFloat = isOnboarding ? 9.0 : 8.6
+        let overAngleThreshold: CGFloat = isOnboarding ? 70 : 65
+        let overHoldThreshold: TimeInterval = isOnboarding ? 2.05 : 1.95
+
+        if angularVelocity < earlyVelocityThreshold || degrees < earlyAngleThreshold {
             return .early
         }
 
-        if angularVelocity > 8.6 || degrees > 65 || holdDuration > 1.95 {
+        if angularVelocity > overVelocityThreshold || degrees > overAngleThreshold || holdDuration > overHoldThreshold {
             return .over
         }
 
@@ -87,29 +99,44 @@ enum ThrowMechanics {
         return .nice
     }
 
-    static func release(for holdDuration: TimeInterval, challenge: DailyChallenge? = nil) -> ThrowReleaseResult {
-        release(for: orbitAngle(after: holdDuration), holdDuration: holdDuration, challenge: challenge)
+    static func release(
+        for holdDuration: TimeInterval,
+        challenge: DailyChallenge? = nil,
+        isOnboarding: Bool = false
+    ) -> ThrowReleaseResult {
+        release(
+            for: orbitAngle(after: holdDuration),
+            holdDuration: holdDuration,
+            challenge: challenge,
+            isOnboarding: isOnboarding
+        )
     }
 
-    static func release(for orbitAngle: CGFloat, holdDuration: TimeInterval, challenge: DailyChallenge? = nil) -> ThrowReleaseResult {
+    static func release(
+        for orbitAngle: CGFloat,
+        holdDuration: TimeInterval,
+        challenge: DailyChallenge? = nil,
+        isOnboarding: Bool = false
+    ) -> ThrowReleaseResult {
         let direction = tangentialDirection(for: orbitAngle)
         let tangentialSpeed = linearSpeed(for: holdDuration)
         let judgement = releaseJudgement(
             for: atan2(direction.dy, direction.dx),
             speed: tangentialSpeed,
-            holdDuration: holdDuration
+            holdDuration: holdDuration,
+            isOnboarding: isOnboarding
         )
 
         let multiplier: CGFloat
         switch judgement {
         case .early:
-            multiplier = 0.88
+            multiplier = isOnboarding ? 0.93 : 0.88
         case .nice:
             multiplier = 1.0
         case .perfect:
             multiplier = 1.16
         case .over:
-            multiplier = 1.05
+            multiplier = isOnboarding ? 1.02 : 1.05
         }
 
         let challengeMultiplier: CGFloat

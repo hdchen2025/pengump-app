@@ -3,7 +3,7 @@ import SpriteKit
 
 final class SealThrowScene: SKScene {
     private let distanceMilestones = [100, 300, 800, 1500, 3000]
-    private let readyHintText = "按住任意位置蓄力，松手远投，飞行中还能再点一次扑腾。"
+    private let standardReadyHintText = "按住任意位置蓄力，松手远投，飞行中还能再点一次扑腾。"
     private let swingHintText = "松手出手，抡得越久越猛。"
     private let flapHintText = "飞行中再点一次可扑腾续命。"
     private let postFlapHintText = "稳住落点，准备下一投。"
@@ -51,6 +51,7 @@ final class SealThrowScene: SKScene {
 
     private let launchBaseX: CGFloat = 170
     private let minimumRunSummaryDuration: TimeInterval = 2.3
+    private let onboardingRestartDelay: TimeInterval = 1.1
     private var shoulderPoint: CGPoint = .zero
 
     private var phase: Phase = .ready
@@ -71,6 +72,8 @@ final class SealThrowScene: SKScene {
     private var triggeredFeatureIDs: Set<String> = []
     private var scheduledCelebrations: [ScheduledCelebration] = []
     private var cooldownRestartDeadline: TimeInterval?
+    private var activeThrowNumber = 1
+    private var activeOnboardingStage = 0
 
     private var skyNode: SKSpriteNode!
     private var horizonNode: SKSpriteNode!
@@ -93,6 +96,31 @@ final class SealThrowScene: SKScene {
     private var recapDetailLabel = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
     private var recapFooterLabel = SKLabelNode(fontNamed: "AvenirNext-Medium")
     private var penguinTrail: SKEmitterNode?
+
+    private var completedThrowCount: Int {
+        SaveManager.shared.totalThrows
+    }
+
+    private var isOnboardingThrow: Bool {
+        activeOnboardingStage > 0
+    }
+
+    private var isFirstOnboardingThrow: Bool {
+        activeOnboardingStage == 1
+    }
+
+    private var readyHintText: String {
+        switch activeOnboardingStage {
+        case 1:
+            return "按住屏幕开始抡臂，松手就能把企鹅甩出去。"
+        case 2:
+            return "这一把试着先稳定出手，飞行中还能再点一次扑腾。"
+        case 3:
+            return "第三把开始找甜区，先稳定打出“不错”。"
+        default:
+            return standardReadyHintText
+        }
+    }
 
     override func didMove(to view: SKView) {
         scaleMode = .resizeFill
@@ -336,7 +364,7 @@ final class SealThrowScene: SKScene {
 
         hintLabel.fontSize = 16
         hintLabel.fontColor = SKColor(red: 0.23, green: 0.31, blue: 0.40, alpha: 0.8)
-        hintLabel.text = readyHintText
+        hintLabel.text = standardReadyHintText
 
         distanceLabel.fontSize = 28
         distanceLabel.fontColor = .white
@@ -451,6 +479,8 @@ final class SealThrowScene: SKScene {
         removeAction(forKey: "autoRestart")
         phase = .ready
         dailyChallenge = SaveManager.shared.currentDailyChallenge()
+        activeThrowNumber = completedThrowCount + 1
+        activeOnboardingStage = activeThrowNumber <= ThrowMechanics.onboardingThrowLimit ? activeThrowNumber : 0
         scheduledCelebrations.removeAll()
         cooldownRestartDeadline = nil
         holdDuration = 0
@@ -492,8 +522,9 @@ final class SealThrowScene: SKScene {
         hideRecapCard()
         updateSessionLabel()
         updateObjectiveLabel()
+        updateMetaHUDVisibility()
         if showHint {
-            showFloatingMessage("今日挑战：\(dailyChallenge.title) · \(dailyChallenge.targetDistance)m", color: profile.accentColor, duration: 0.8)
+            showFloatingMessage(initialFloatingHintText(), color: profile.accentColor, duration: 0.8)
         }
     }
 
@@ -523,7 +554,11 @@ final class SealThrowScene: SKScene {
     private func releasePenguin() {
         guard phase == .swinging else { return }
 
-        let launch = ThrowMechanics.release(for: holdDuration, challenge: dailyChallenge)
+        let launch = ThrowMechanics.release(
+            for: holdDuration,
+            challenge: dailyChallenge,
+            isOnboarding: isOnboardingThrow
+        )
         metrics.beginRun(bestDistance: CGFloat(SaveManager.shared.bestDistance))
         metrics.releaseLabel = launch.judgement.rawValue
         releaseLabel.text = launch.judgement.rawValue
@@ -567,7 +602,8 @@ final class SealThrowScene: SKScene {
         let previewJudgement = ThrowMechanics.releaseJudgement(
             for: max(0.05, orbitAngle + .pi / 2),
             speed: ThrowMechanics.linearSpeed(for: holdDuration),
-            holdDuration: holdDuration
+            holdDuration: holdDuration,
+            isOnboarding: isOnboardingThrow
         )
         releaseLabel.text = "\(previewJudgement.rawValue)  \(Int(speed.rounded()))"
         releaseLabel.fontColor = SKColor(cgColor: previewJudgement.accentColor)
@@ -637,6 +673,7 @@ final class SealThrowScene: SKScene {
         guard phase == .flying else { return }
 
         phase = .cooldown
+        let wasOnboardingThrow = isOnboardingThrow
         let didBreakRecord = metrics.didBeatBest
         let roundedDistance = Int(metrics.currentDistance.rounded())
         let distanceText = "\(roundedDistance)m"
@@ -659,7 +696,13 @@ final class SealThrowScene: SKScene {
         }
         updateSessionLabel()
         updateObjectiveLabel()
-        showRunRecap(distance: roundedDistance, didBreakRecord: didBreakRecord, outcome: outcome)
+        updateMetaHUDVisibility()
+        showRunRecap(
+            distance: roundedDistance,
+            didBreakRecord: didBreakRecord,
+            outcome: outcome,
+            isQuick: wasOnboardingThrow
+        )
 
         if didBreakRecord {
             ParticleEffects.shared.playStarBurst(at: penguinNode.position, in: self)
@@ -667,47 +710,49 @@ final class SealThrowScene: SKScene {
         }
 
         var extraMessages: [CelebrationMessage] = []
-        if outcome.didCompleteDailyChallenge {
-            extraMessages.append(
-                CelebrationMessage(
-                    text: "挑战达成 \(outcome.challenge.targetDistance)m",
-                    color: SKColor(red: 0.48, green: 0.94, blue: 0.86, alpha: 1.0)
+        if !wasOnboardingThrow {
+            if outcome.didCompleteDailyChallenge {
+                extraMessages.append(
+                    CelebrationMessage(
+                        text: "挑战达成 \(outcome.challenge.targetDistance)m",
+                        color: SKColor(red: 0.48, green: 0.94, blue: 0.86, alpha: 1.0)
+                    )
                 )
-            )
-        } else if outcome.didSetDailyChallengeRecord {
-            extraMessages.append(
-                CelebrationMessage(
-                    text: "刷新今日最佳",
-                    color: SKColor(red: 0.62, green: 0.9, blue: 1.0, alpha: 1.0)
+            } else if outcome.didSetDailyChallengeRecord {
+                extraMessages.append(
+                    CelebrationMessage(
+                        text: "刷新今日最佳",
+                        color: SKColor(red: 0.62, green: 0.9, blue: 1.0, alpha: 1.0)
+                    )
                 )
-            )
-        }
+            }
 
-        if outcome.didStartDailyChallengeToday && outcome.dailyChallengeStreakCount > 1 {
-            extraMessages.append(
-                CelebrationMessage(
-                    text: "连续挑战 \(outcome.dailyChallengeStreakText) 天",
-                    color: SKColor(red: 0.58, green: 0.92, blue: 1.0, alpha: 1.0)
+            if outcome.didStartDailyChallengeToday && outcome.dailyChallengeStreakCount > 1 {
+                extraMessages.append(
+                    CelebrationMessage(
+                        text: "连续挑战 \(outcome.dailyChallengeStreakText) 天",
+                        color: SKColor(red: 0.58, green: 0.92, blue: 1.0, alpha: 1.0)
+                    )
                 )
-            )
-        }
+            }
 
-        if let unlockedTitle = outcome.newlyUnlockedTitle {
-            extraMessages.append(
-                CelebrationMessage(
-                    text: "新称号：\(unlockedTitle.title)",
-                    color: SKColor(red: 1.0, green: 0.86, blue: 0.42, alpha: 1.0)
+            if let unlockedTitle = outcome.newlyUnlockedTitle {
+                extraMessages.append(
+                    CelebrationMessage(
+                        text: "新称号：\(unlockedTitle.title)",
+                        color: SKColor(red: 1.0, green: 0.86, blue: 0.42, alpha: 1.0)
+                    )
                 )
-            )
-        }
+            }
 
-        for achievement in outcome.newlyUnlockedAchievements {
-            extraMessages.append(
-                CelebrationMessage(
-                    text: "成就解锁：\(achievement.title)",
-                    color: SKColor(red: 1.0, green: 0.88, blue: 0.48, alpha: 1.0)
+            for achievement in outcome.newlyUnlockedAchievements {
+                extraMessages.append(
+                    CelebrationMessage(
+                        text: "成就解锁：\(achievement.title)",
+                        color: SKColor(red: 1.0, green: 0.88, blue: 0.48, alpha: 1.0)
+                    )
                 )
-            )
+            }
         }
 
         let extraDelay = scheduleCelebrationMessages(extraMessages)
@@ -715,7 +760,8 @@ final class SealThrowScene: SKScene {
             ParticleEffects.shared.playStarBurst(at: penguinNode.position, in: self)
         }
 
-        scheduleAutoRestart(after: max(minimumRunSummaryDuration, 1.0 + extraDelay))
+        let restartDelay = wasOnboardingThrow ? onboardingRestartDelay : max(minimumRunSummaryDuration, 1.0 + extraDelay)
+        scheduleAutoRestart(after: restartDelay)
     }
 
     private func updateHUD(for profile: EnvironmentProfile, flapsRemaining: Int) {
@@ -990,6 +1036,22 @@ final class SealThrowScene: SKScene {
         sessionLabel.text = "会话 \(sessionThrowCount) 投 · 完美 \(sessionPerfectCount) 次 · 最佳 \(sessionBestDistance)m"
     }
 
+    private func updateMetaHUDVisibility() {
+        let showMeta = !isOnboardingThrow
+        let showBestAndBiome = !isFirstOnboardingThrow
+        bestLabel.alpha = showBestAndBiome ? 1.0 : 0.0
+        biomeLabel.alpha = showBestAndBiome ? 1.0 : 0.0
+        sessionLabel.alpha = showMeta ? 1.0 : 0.0
+        objectiveLabel.alpha = showMeta ? 1.0 : 0.0
+    }
+
+    private func initialFloatingHintText() -> String {
+        if isOnboardingThrow {
+            return readyHintText
+        }
+        return "今日挑战：\(dailyChallenge.title) · \(dailyChallenge.targetDistance)m"
+    }
+
     private func updateObjectiveLabel() {
         let challengeBest = SaveManager.shared.dailyChallengeBest(for: dailyChallenge)
         let activity = SaveManager.shared.dailyChallengeActivitySummary()
@@ -1003,7 +1065,7 @@ final class SealThrowScene: SKScene {
         updateObjectiveLabel()
     }
 
-    private func showRunRecap(distance: Int, didBreakRecord: Bool, outcome: DistanceRunOutcome) {
+    private func showRunRecap(distance: Int, didBreakRecord: Bool, outcome: DistanceRunOutcome, isQuick: Bool) {
         let challengeBest = SaveManager.shared.dailyChallengeBest(for: outcome.challenge)
         let titleProgress = SaveManager.shared.distanceTitleProgress()
         let titleText: String
@@ -1016,21 +1078,23 @@ final class SealThrowScene: SKScene {
         recapTitleLabel.text = didBreakRecord ? "新纪录 \(distance)m · \(metrics.releaseLabel)" : "本次 \(distance)m · \(metrics.releaseLabel)"
         let chainText = metrics.interactionCount > 0 ? "连锁 \(metrics.interactionCount)" : "无连锁"
         let airTimeText = String(format: "%.1fs", metrics.airTime)
-        recapDetailLabel.text = "\(metrics.highestBiomeName) · \(chainText) · 滞空 \(airTimeText)"
+        recapDetailLabel.text = isQuick ? "继续找甜区，准备下一投" : "\(metrics.highestBiomeName) · \(chainText) · 滞空 \(airTimeText)"
         let challengeText: String
-        if outcome.didCompleteDailyChallenge {
+        if isQuick {
+            challengeText = "自动续投即将开始"
+        } else if outcome.didCompleteDailyChallenge {
             challengeText = "挑战完成 \(outcome.challenge.targetDistance)m"
         } else {
             challengeText = "\(outcome.challenge.title) · 今日 \(challengeBest)/\(outcome.challenge.targetDistance)m"
         }
-        recapFooterLabel.text = "\(challengeText) · \(titleText)"
+        recapFooterLabel.text = isQuick ? challengeText : "\(challengeText) · \(titleText)"
         recapCard.removeAllActions()
         recapCard.setScale(0.94)
         recapCard.alpha = 1.0
         recapCard.run(
             SKAction.sequence([
                 SKAction.scale(to: 1.0, duration: 0.12),
-                SKAction.wait(forDuration: 1.8),
+                SKAction.wait(forDuration: isQuick ? 0.72 : 1.8),
                 SKAction.fadeOut(withDuration: 0.22)
             ])
         )
