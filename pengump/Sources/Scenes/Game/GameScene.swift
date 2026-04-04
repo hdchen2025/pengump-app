@@ -6,10 +6,11 @@ struct GamePhysics {
     static let maxPullDistance: CGFloat = 138.0
     static let minPullDistance: CGFloat = 18.0
     static let launchSpeedMultiplier: CGFloat = 0.72
-    static let minimumLaunchSpeed: CGFloat = 40.0
-    static let maxLaunchSpeed: CGFloat = 96.0
-    static let minimumRearPullLift: CGFloat = 28.0
-    static let minimumRearPullAngle: CGFloat = .pi / 4.6
+    static let minimumLaunchSpeed: CGFloat = 46.0
+    static let maxLaunchSpeed: CGFloat = 112.0
+    static let minimumSwingAngle: CGFloat = .pi / 10
+    static let maximumSwingAngle: CGFloat = .pi * 0.46
+    static let minimumSwingPowerToLaunch: CGFloat = 0.10
     static let gravity: CGFloat = 0.22
     static let airResistance: CGFloat = 0.992
     static let rubberBandElasticity: CGFloat = 0.4
@@ -252,12 +253,18 @@ class GameScene: SKScene {
     private var gameCamera: SKCameraNode!
     private let hudNode = SKNode()
     private var introPreviewRunning: Bool = false
+    private var swingPivotNode: SKNode!
+    private var batNode: SKShapeNode!
+    private var aimAngle: CGFloat = GamePhysics.minimumSwingAngle
+    private var aimPower: CGFloat = 0
 
     // MARK: - UI节点
 
     private var scoreLabel: SKLabelNode!
     private var levelLabel: SKLabelNode!
     private var penguinCountLabel: SKLabelNode!
+    private var powerMeterLabel: SKLabelNode!
+    private var powerMeterFillNode: SKSpriteNode!
     private var hintLabel: SKLabelNode!
     private var resultOverlay: SKNode?
     private var hasPresentedResult: Bool = false
@@ -428,78 +435,162 @@ class GameScene: SKScene {
     }
 
     private func setupSlingshot() {
-        let baseX = frame.width * 0.18
-        let baseY = frame.height * 0.22
-        let postWidth: CGFloat = 12
-        let postHeight: CGFloat = 100
-        let forkHeight: CGFloat = 40
-        let forkWidth: CGFloat = 50
-
-        let leftArm = SKShapeNode(rectOf: CGSize(width: postWidth, height: forkHeight), cornerRadius: 3)
-        leftArm.fillColor = UIColor(red: 0.55, green: 0.27, blue: 0.07, alpha: 1.0)
-        leftArm.strokeColor = UIColor(red: 0.4, green: 0.2, blue: 0.05, alpha: 1.0)
-        leftArm.lineWidth = 2
-        leftArm.position = CGPoint(x: -forkWidth / 2, y: postHeight / 2 + forkHeight / 2)
-        leftArm.zPosition = 10
-
-        let rightArm = SKShapeNode(rectOf: CGSize(width: postWidth, height: forkHeight), cornerRadius: 3)
-        rightArm.fillColor = UIColor(red: 0.55, green: 0.27, blue: 0.07, alpha: 1.0)
-        rightArm.strokeColor = UIColor(red: 0.4, green: 0.2, blue: 0.05, alpha: 1.0)
-        rightArm.lineWidth = 2
-        rightArm.position = CGPoint(x: forkWidth / 2, y: postHeight / 2 + forkHeight / 2)
-        rightArm.zPosition = 10
-
-        let post = SKShapeNode(rectOf: CGSize(width: postWidth, height: postHeight), cornerRadius: 3)
-        post.fillColor = UIColor(red: 0.55, green: 0.27, blue: 0.07, alpha: 1.0)
-        post.strokeColor = UIColor(red: 0.4, green: 0.2, blue: 0.05, alpha: 1.0)
-        post.lineWidth = 2
-        post.zPosition = 10
+        let baseX = frame.width * 0.16
+        let baseY = frame.height * 0.17
 
         slingshotBase = SKNode()
-        slingshotBase.addChild(leftArm)
-        slingshotBase.addChild(rightArm)
-        slingshotBase.addChild(post)
         slingshotBase.position = CGPoint(x: baseX, y: baseY)
         addChild(slingshotBase)
 
-        slingshotAnchorLeft = CGPoint(x: baseX - forkWidth / 2, y: baseY + postHeight / 2 + forkHeight)
-        slingshotAnchorRight = CGPoint(x: baseX + forkWidth / 2, y: baseY + postHeight / 2 + forkHeight)
+        let platform = SKShapeNode(rectOf: CGSize(width: 150, height: 18), cornerRadius: 9)
+        platform.fillColor = UIColor(red: 0.81, green: 0.71, blue: 0.56, alpha: 1.0)
+        platform.strokeColor = UIColor(red: 0.54, green: 0.42, blue: 0.25, alpha: 1.0)
+        platform.lineWidth = 2
+        platform.position = CGPoint(x: 34, y: 10)
+        slingshotBase.addChild(platform)
+
+        let body = SKShapeNode(ellipseOf: CGSize(width: 34, height: 58))
+        body.fillColor = UIColor(red: 0.96, green: 0.42, blue: 0.36, alpha: 1.0)
+        body.strokeColor = UIColor(red: 0.65, green: 0.18, blue: 0.14, alpha: 1.0)
+        body.lineWidth = 2
+        body.position = CGPoint(x: 0, y: 44)
+        slingshotBase.addChild(body)
+
+        let head = SKShapeNode(circleOfRadius: 15)
+        head.fillColor = UIColor(red: 1.0, green: 0.89, blue: 0.73, alpha: 1.0)
+        head.strokeColor = UIColor(red: 0.72, green: 0.58, blue: 0.42, alpha: 1.0)
+        head.lineWidth = 2
+        head.position = CGPoint(x: 0, y: 84)
+        slingshotBase.addChild(head)
+
+        let visor = SKShapeNode(rectOf: CGSize(width: 18, height: 6), cornerRadius: 3)
+        visor.fillColor = UIColor(red: 0.16, green: 0.2, blue: 0.28, alpha: 1.0)
+        visor.strokeColor = .clear
+        visor.position = CGPoint(x: 6, y: 1)
+        head.addChild(visor)
+
+        let tee = SKShapeNode(rectOf: CGSize(width: 14, height: 26), cornerRadius: 4)
+        tee.fillColor = UIColor(red: 0.38, green: 0.46, blue: 0.54, alpha: 1.0)
+        tee.strokeColor = UIColor(red: 0.22, green: 0.28, blue: 0.34, alpha: 1.0)
+        tee.lineWidth = 2
+        tee.position = CGPoint(x: 66, y: 25)
+        slingshotBase.addChild(tee)
+
+        let teeTop = SKShapeNode(rectOf: CGSize(width: 26, height: 8), cornerRadius: 4)
+        teeTop.fillColor = UIColor(red: 0.63, green: 0.74, blue: 0.82, alpha: 1.0)
+        teeTop.strokeColor = .clear
+        teeTop.position = CGPoint(x: 0, y: 9)
+        tee.addChild(teeTop)
+
+        swingPivotNode = SKNode()
+        swingPivotNode.position = CGPoint(x: baseX + 12, y: baseY + 60)
+        addChild(swingPivotNode)
+
+        batNode = SKShapeNode(rectOf: CGSize(width: 64, height: 10), cornerRadius: 5)
+        batNode.fillColor = UIColor(red: 0.45, green: 0.27, blue: 0.13, alpha: 1.0)
+        batNode.strokeColor = UIColor(red: 0.25, green: 0.14, blue: 0.06, alpha: 1.0)
+        batNode.lineWidth = 2
+        batNode.position = CGPoint(x: 34, y: 0)
+        swingPivotNode.addChild(batNode)
+
+        let grip = SKShapeNode(rectOf: CGSize(width: 16, height: 12), cornerRadius: 4)
+        grip.fillColor = UIColor(red: 0.19, green: 0.12, blue: 0.08, alpha: 1.0)
+        grip.strokeColor = .clear
+        grip.position = CGPoint(x: -22, y: 0)
+        batNode.addChild(grip)
+
+        let maceHead = SKShapeNode(circleOfRadius: 13)
+        maceHead.fillColor = UIColor(red: 0.34, green: 0.39, blue: 0.47, alpha: 1.0)
+        maceHead.strokeColor = UIColor(red: 0.2, green: 0.24, blue: 0.3, alpha: 1.0)
+        maceHead.lineWidth = 2
+        maceHead.position = CGPoint(x: 28, y: 0)
+        batNode.addChild(maceHead)
+
+        for index in 0..<6 {
+            let spikePath = CGMutablePath()
+            spikePath.move(to: CGPoint(x: 0, y: 0))
+            spikePath.addLine(to: CGPoint(x: 10, y: 2))
+            spikePath.addLine(to: CGPoint(x: 0, y: 4))
+            spikePath.closeSubpath()
+
+            let spike = SKShapeNode(path: spikePath)
+            spike.fillColor = UIColor(red: 0.72, green: 0.77, blue: 0.84, alpha: 1.0)
+            spike.strokeColor = UIColor(red: 0.26, green: 0.31, blue: 0.37, alpha: 1.0)
+            spike.lineWidth = 1.2
+            let rotation = CGFloat(index) * (.pi / 3)
+            spike.zRotation = rotation
+            spike.position = CGPoint(
+                x: cos(rotation) * 11,
+                y: sin(rotation) * 11
+            )
+            maceHead.addChild(spike)
+        }
 
         leftBandNode = SKShapeNode()
-        leftBandNode.strokeColor = UIColor(red: 0.6, green: 0.35, blue: 0.1, alpha: 1.0)
+        leftBandNode.strokeColor = UIColor(red: 0.98, green: 0.62, blue: 0.25, alpha: 0.7)
         leftBandNode.lineWidth = 4
         leftBandNode.lineCap = .round
-        leftBandNode.zPosition = 5
+        leftBandNode.zPosition = 7
         addChild(leftBandNode)
 
         rightBandNode = SKShapeNode()
-        rightBandNode.strokeColor = UIColor(red: 0.6, green: 0.35, blue: 0.1, alpha: 1.0)
-        rightBandNode.lineWidth = 4
+        rightBandNode.strokeColor = UIColor(red: 0.98, green: 0.82, blue: 0.38, alpha: 0.55)
+        rightBandNode.lineWidth = 2
         rightBandNode.lineCap = .round
-        rightBandNode.zPosition = 5
+        rightBandNode.zPosition = 6
         addChild(rightBandNode)
 
-        updateBandPositions(penguinPos: CGPoint(x: baseX, y: slingshotAnchorLeft.y))
+        slingshotAnchorLeft = swingPivotNode.position
+        slingshotAnchorRight = penguinReadyPosition()
+        aimAngle = .pi / 4.6
+        aimPower = 0.42
+        updateSwingAimingVisuals(showTrajectory: true)
     }
 
-    private func updateBandPositions(penguinPos: CGPoint) {
-        let leftPath = CGMutablePath()
-        leftPath.move(to: slingshotAnchorLeft)
-        let midLeft = CGPoint(
-            x: (slingshotAnchorLeft.x + penguinPos.x) / 2,
-            y: (slingshotAnchorLeft.y + penguinPos.y) / 2 - 5
-        )
-        leftPath.addQuadCurve(to: penguinPos, control: midLeft)
-        leftBandNode.path = leftPath
+    private func penguinReadyPosition() -> CGPoint {
+        CGPoint(x: slingshotBase.position.x + 66, y: slingshotBase.position.y + 38)
+    }
 
-        let rightPath = CGMutablePath()
-        rightPath.move(to: slingshotAnchorRight)
-        let midRight = CGPoint(
-            x: (slingshotAnchorRight.x + penguinPos.x) / 2,
-            y: (slingshotAnchorRight.y + penguinPos.y) / 2 - 5
+    private func aimOrigin() -> CGPoint {
+        penguinNode?.position ?? penguinReadyPosition()
+    }
+
+    private func strikeOrigin() -> CGPoint {
+        swingPivotNode?.position ?? CGPoint(x: slingshotBase.position.x + 12, y: slingshotBase.position.y + 60)
+    }
+
+    private func updateSwingAimingVisuals(showTrajectory: Bool) {
+        let launchOrigin = aimOrigin()
+        let swingOrigin = strikeOrigin()
+        let guideLength = 56 + aimPower * 120
+        let primaryTip = CGPoint(
+            x: launchOrigin.x + cos(aimAngle) * guideLength,
+            y: launchOrigin.y + sin(aimAngle) * guideLength
         )
-        rightPath.addQuadCurve(to: penguinPos, control: midRight)
-        rightBandNode.path = rightPath
+        let secondaryTip = CGPoint(
+            x: launchOrigin.x + cos(aimAngle + 0.08) * (guideLength * 0.88),
+            y: launchOrigin.y + sin(aimAngle + 0.08) * (guideLength * 0.88)
+        )
+
+        let primaryPath = CGMutablePath()
+        primaryPath.move(to: launchOrigin)
+        primaryPath.addLine(to: primaryTip)
+        leftBandNode.path = primaryPath
+        leftBandNode.alpha = showTrajectory ? 1.0 : 0.32
+
+        let secondaryPath = CGMutablePath()
+        secondaryPath.move(to: swingOrigin)
+        secondaryPath.addLine(to: launchOrigin)
+        secondaryPath.addLine(to: secondaryTip)
+        rightBandNode.path = secondaryPath
+        rightBandNode.alpha = showTrajectory ? 0.82 : 0.22
+
+        let cockedBackAngle = aimAngle - (0.68 + aimPower * 0.34)
+        swingPivotNode.zRotation = cockedBackAngle
+        if trajectoryLine != nil {
+            trajectoryLine.isHidden = !showTrajectory
+        }
+        updatePowerMeter()
     }
 
     private func setupPenguinQueue() {
@@ -612,11 +703,14 @@ class GameScene: SKScene {
         guard penguinNode == nil, activePenguin == nil, penguinsRemaining > 0 else { return }
 
         penguinNode = createPenguinNode()
-        let launchPos = CGPoint(x: slingshotBase.position.x, y: slingshotAnchorLeft.y)
+        let launchPos = penguinReadyPosition()
         penguinNode.position = launchPos
         penguinNode.zPosition = 20
         addChild(penguinNode)
-        updateBandPositions(penguinPos: launchPos)
+        aimAngle = .pi / 4.6
+        aimPower = 0.42
+        updateSwingAimingVisuals(showTrajectory: true)
+        drawTrajectory()
         flightState = .ready
     }
 
@@ -670,6 +764,28 @@ class GameScene: SKScene {
         penguinCountLabel.position = CGPoint(x: rightEdge - 55, y: topEdge - 40)
         hudNode.addChild(penguinCountLabel)
 
+        powerMeterLabel = SKLabelNode(text: "力度 42%")
+        powerMeterLabel.fontSize = 14
+        powerMeterLabel.fontColor = UIColor(red: 0.84, green: 0.42, blue: 0.16, alpha: 1.0)
+        powerMeterLabel.fontName = "BoldSystem"
+        powerMeterLabel.position = CGPoint(x: rightEdge - 90, y: topEdge - 68)
+        hudNode.addChild(powerMeterLabel)
+
+        let powerMeterBg = SKShapeNode(rectOf: CGSize(width: 128, height: 16), cornerRadius: 8)
+        powerMeterBg.fillColor = UIColor(white: 1.0, alpha: 0.18)
+        powerMeterBg.strokeColor = UIColor(red: 0.74, green: 0.58, blue: 0.28, alpha: 0.85)
+        powerMeterBg.lineWidth = 1.5
+        powerMeterBg.position = CGPoint(x: rightEdge - 90, y: topEdge - 88)
+        hudNode.addChild(powerMeterBg)
+
+        powerMeterFillNode = SKSpriteNode(
+            color: UIColor(red: 0.98, green: 0.62, blue: 0.25, alpha: 1.0),
+            size: CGSize(width: 120, height: 10)
+        )
+        powerMeterFillNode.anchorPoint = CGPoint(x: 0, y: 0.5)
+        powerMeterFillNode.position = CGPoint(x: powerMeterBg.position.x - 60, y: powerMeterBg.position.y)
+        hudNode.addChild(powerMeterFillNode)
+
         let targetLabel = SKLabelNode(text: "目标: \(levelConfig.targetScore)")
         targetLabel.fontSize = 14
         targetLabel.fontColor = UIColor(red: 0.4, green: 0.5, blue: 0.6, alpha: 1.0)
@@ -693,6 +809,8 @@ class GameScene: SKScene {
                 SKAction.fadeOut(withDuration: 1.0)
             ]))
         }
+
+        updatePowerMeter()
     }
 
     private func setupIceBlocks() {
@@ -715,6 +833,15 @@ class GameScene: SKScene {
         node.calculateAccumulatedFrame().insetBy(dx: -expandBy, dy: -expandBy)
     }
 
+    private func updatePowerMeter() {
+        guard powerMeterFillNode != nil, powerMeterLabel != nil else { return }
+
+        let clampedPower = max(0, min(aimPower, 1))
+        powerMeterFillNode.xScale = max(0.04, clampedPower)
+        powerMeterFillNode.alpha = clampedPower > 0.01 ? 1.0 : 0.32
+        powerMeterLabel.text = "力度 \(Int((clampedPower * 100).rounded()))%"
+    }
+
     private func isNodeInteractable(_ node: SKNode?, minimumAlpha: CGFloat = 0.95) -> Bool {
         guard let node else { return false }
         return node.parent != nil && !node.isHidden && node.alpha >= minimumAlpha
@@ -723,15 +850,24 @@ class GameScene: SKScene {
     private func canStartAiming(at location: CGPoint) -> Bool {
         guard let penguin = penguinNode else { return false }
 
-        let anchorPos = CGPoint(x: slingshotBase.position.x, y: slingshotAnchorLeft.y)
-        let anchorHitZone = CGRect(
-            x: anchorPos.x - 56,
-            y: anchorPos.y - 56,
+        let strikePos = strikeOrigin()
+        let strikeHitZone = CGRect(
+            x: strikePos.x - 56,
+            y: strikePos.y - 56,
             width: 112,
             height: 112
         )
+        let launchPos = aimOrigin()
+        let launchHitZone = CGRect(
+            x: launchPos.x - 64,
+            y: launchPos.y - 64,
+            width: 128,
+            height: 128
+        )
 
-        return hitFrame(for: penguin, expandBy: 28).contains(location) || anchorHitZone.contains(location)
+        return hitFrame(for: penguin, expandBy: 28).contains(location)
+            || strikeHitZone.contains(location)
+            || launchHitZone.contains(location)
     }
 
     private func clearGroundedState() {
@@ -791,7 +927,7 @@ class GameScene: SKScene {
         if flightState == .ready,
            canStartAiming(at: location) {
             flightState = .aiming
-            trajectoryLine.isHidden = false
+            updateSwingAim(at: location)
         }
     }
 
@@ -799,42 +935,21 @@ class GameScene: SKScene {
         guard flightState == .aiming, let touch = touches.first else { return }
 
         let location = touch.location(in: self)
-        let anchorPos = CGPoint(x: slingshotBase.position.x, y: slingshotAnchorLeft.y)
-        var dx = min(location.x, anchorPos.x - 12) - anchorPos.x
-        var dy = min(location.y, anchorPos.y - physics.minimumRearPullLift) - anchorPos.y
-        let rawDistance = sqrt(dx * dx + dy * dy)
-        let scale = rawDistance > physics.maxPullDistance ? physics.maxPullDistance / rawDistance : 1.0
-        dx *= scale
-        dy *= scale
-        let distance = sqrt(dx * dx + dy * dy)
-        let clampedPos = CGPoint(x: anchorPos.x + dx, y: anchorPos.y + dy)
-
-        penguinNode?.position = clampedPos
-        updateBandPositions(penguinPos: clampedPos)
-
-        if distance >= physics.minPullDistance {
-            drawTrajectory()
-            trajectoryLine.isHidden = false
-        } else {
-            trajectoryLine.isHidden = true
-        }
+        updateSwingAim(at: location)
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard flightState == .aiming else { return }
 
-        let anchorPos = CGPoint(x: slingshotBase.position.x, y: slingshotAnchorLeft.y)
-        let dx = anchorPos.x - (penguinNode?.position.x ?? anchorPos.x)
-        let dy = anchorPos.y - (penguinNode?.position.y ?? anchorPos.y)
-        let distance = sqrt(dx * dx + dy * dy)
+        if let touch = touches.first {
+            updateSwingAim(at: touch.location(in: self))
+        }
 
-        trajectoryLine.isHidden = true
-
-        if distance < physics.minPullDistance {
-            let restore = SKAction.move(to: anchorPos, duration: 0.2)
-            restore.timingMode = .easeOut
-            penguinNode?.run(restore)
-            updateBandPositions(penguinPos: anchorPos)
+        if aimPower < physics.minimumSwingPowerToLaunch {
+            aimPower = 0.42
+            aimAngle = .pi / 4.6
+            updateSwingAimingVisuals(showTrajectory: true)
+            drawTrajectory()
             flightState = .ready
             return
         }
@@ -848,32 +963,42 @@ class GameScene: SKScene {
 
     // MARK: - 发射逻辑
 
-    private func launchParameters(for penguinPosition: CGPoint) -> (speed: CGFloat, angle: CGFloat) {
-        let anchorPos = CGPoint(x: slingshotBase.position.x, y: slingshotAnchorLeft.y)
-        let dx = anchorPos.x - penguinPosition.x
-        let dy = anchorPos.y - penguinPosition.y
-        let adjustedDY = max(dy, physics.minimumRearPullLift)
-        let distance = sqrt(dx * dx + adjustedDY * adjustedDY)
+    private func updateSwingAim(at location: CGPoint) {
+        let origin = aimOrigin()
+        let forward = max(location.x - origin.x, 0)
+        let lift = max(location.y - origin.y, 0)
+        let dx = max(forward, 12)
+        let rawAngle = atan2(lift, dx)
+        aimAngle = min(max(rawAngle, physics.minimumSwingAngle), physics.maximumSwingAngle)
 
-        var speed = max(distance * physics.launchSpeedMultiplier, physics.minimumLaunchSpeed)
-        speed = min(speed, physics.maxLaunchSpeed)
+        let distance = min(hypot(forward, lift), physics.maxPullDistance)
+        let normalizedDistance = max(0, distance - physics.minPullDistance)
+        let powerDenominator = max(1, physics.maxPullDistance - physics.minPullDistance)
+        aimPower = min(1, normalizedDistance / powerDenominator)
 
-        let maximumLaunchAngle: CGFloat = .pi * 0.72
-        let rawAngle = atan2(adjustedDY, dx)
-        let angle = min(max(rawAngle, physics.minimumRearPullAngle), maximumLaunchAngle)
+        updateSwingAimingVisuals(showTrajectory: aimPower >= physics.minimumSwingPowerToLaunch)
+        if aimPower >= physics.minimumSwingPowerToLaunch {
+            drawTrajectory()
+        }
+    }
 
-        return (speed, angle)
+    private func launchParameters() -> (speed: CGFloat, angle: CGFloat) {
+        let curvedPower = CGFloat(pow(Double(max(aimPower, 0)), Double(physics.launchSpeedMultiplier)))
+        let speedRange = physics.maxLaunchSpeed - physics.minimumLaunchSpeed
+        let speed = physics.minimumLaunchSpeed + speedRange * curvedPower
+        return (speed, aimAngle)
     }
 
     private func drawTrajectory() {
         guard let penguin = penguinNode else { return }
 
-        let launch = launchParameters(for: penguin.position)
+        let launch = launchParameters()
+        let previewOffset: CGFloat = 18
         var vx = cos(launch.angle) * launch.speed
         var vy = sin(launch.angle) * launch.speed
 
-        var x = penguin.position.x
-        var y = penguin.position.y
+        var x = penguin.position.x + cos(launch.angle) * previewOffset
+        var y = penguin.position.y + sin(launch.angle) * previewOffset
 
         let path = CGMutablePath()
         var firstPoint = true
@@ -899,9 +1024,14 @@ class GameScene: SKScene {
     private func launchPenguin() {
         guard let penguin = penguinNode else { return }
 
-        let launch = launchParameters(for: penguin.position)
+        let launch = launchParameters()
         let vx = cos(launch.angle) * launch.speed
         let vy = sin(launch.angle) * launch.speed
+        let launchOffset: CGFloat = 18
+        penguin.position = CGPoint(
+            x: penguin.position.x + cos(launch.angle) * launchOffset,
+            y: penguin.position.y + sin(launch.angle) * launchOffset
+        )
 
         penguin.physicsBody = SKPhysicsBody(circleOfRadius: 16)
         penguin.physicsBody?.isDynamic = true
@@ -923,7 +1053,7 @@ class GameScene: SKScene {
         trailEmitter = ParticleEffects.shared.attachTrail(to: penguin)
         penguin.addChild(trailEmitter!)
 
-        // 皮筋弹回动画
+        // 挥棒出手动画
         animateBandsRelease()
 
         // 播放发射音效
@@ -943,29 +1073,22 @@ class GameScene: SKScene {
     }
 
     private func animateBandsRelease() {
-        let anchorPos = CGPoint(x: slingshotBase.position.x, y: slingshotAnchorLeft.y)
+        leftBandNode.removeAllActions()
+        rightBandNode.removeAllActions()
+        leftBandNode.run(SKAction.fadeAlpha(to: 0.0, duration: 0.08))
+        rightBandNode.run(SKAction.fadeAlpha(to: 0.0, duration: 0.08))
 
-        let shrinkLeft = SKAction.move(to: CGPoint(
-            x: (slingshotAnchorLeft.x + anchorPos.x) / 2,
-            y: slingshotAnchorLeft.y - 10
-        ), duration: 0.08)
-        shrinkLeft.timingMode = .easeIn
-
-        let shrinkRight = SKAction.move(to: CGPoint(
-            x: (slingshotAnchorRight.x + anchorPos.x) / 2,
-            y: slingshotAnchorRight.y - 10
-        ), duration: 0.08)
-        shrinkRight.timingMode = .easeIn
-
-        let restoreLeft = SKAction.move(to: slingshotAnchorLeft, duration: 0.12)
-        restoreLeft.timingMode = .easeOut
-
-        let restoreRight = SKAction.move(to: slingshotAnchorRight, duration: 0.12)
-        restoreRight.timingMode = .easeOut
-
-        leftBandNode.run(SKAction.sequence([shrinkLeft, restoreLeft]))
-        rightBandNode.run(SKAction.sequence([shrinkRight, restoreRight]))
-        updateBandPositions(penguinPos: anchorPos)
+        let contactAngle = aimAngle + 0.12 + aimPower * 0.1
+        let followThroughAngle = min(contactAngle + 0.2, physics.maximumSwingAngle + 0.3)
+        let restAngle = physics.minimumSwingAngle - 0.28
+        swingPivotNode.removeAllActions()
+        swingPivotNode.run(
+            SKAction.sequence([
+                SKAction.rotate(toAngle: contactAngle, duration: 0.08, shortestUnitArc: true),
+                SKAction.rotate(toAngle: followThroughAngle, duration: 0.08, shortestUnitArc: true),
+                SKAction.rotate(toAngle: restAngle, duration: 0.18, shortestUnitArc: true)
+            ])
+        )
     }
 
     // MARK: - 每帧更新
