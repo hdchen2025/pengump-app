@@ -1353,18 +1353,29 @@ class GameScene: SKScene {
         let penguinSpeed = sqrt(pb.velocity.dx * pb.velocity.dx + pb.velocity.dy * pb.velocity.dy)
         let segmentStart = lastPenguinPosition ?? penguin.position
         let segmentEnd = penguin.position
-        var firstHit: (block: IceBlockNode, progress: CGFloat)?
+        var firstHit: (block: IceBlockNode, progress: CGFloat, distance: CGFloat)?
 
         for block in iceBlocks {
             guard !block.isBreaking else { continue }
             let projection = segmentProjection(of: block.position, ontoSegmentFrom: segmentStart, end: segmentEnd)
             if projection.distance < 42,
-               firstHit == nil || projection.progress < firstHit!.progress {
-                firstHit = (block, projection.progress)
+               (firstHit == nil
+                || projection.progress < firstHit!.progress
+                || (projection.progress == firstHit!.progress && projection.distance < firstHit!.distance)) {
+                firstHit = (block, projection.progress, projection.distance)
             }
         }
 
-        if let block = firstHit?.block {
+        if let hit = firstHit {
+            let block = hit.block
+            let dx = segmentEnd.x - segmentStart.x
+            let dy = segmentEnd.y - segmentStart.y
+            let impactPoint = CGPoint(
+                x: segmentStart.x + dx * hit.progress,
+                y: segmentStart.y + dy * hit.progress
+            )
+            penguin.position = impactPoint
+
             let damage = max(1, Int(penguinSpeed / 3))
             let destroyed = block.takeDamage(damage)
 
