@@ -247,6 +247,7 @@ class GameScene: SKScene {
     private var slingshotAnchorLeft: CGPoint = .zero
     private var slingshotAnchorRight: CGPoint = .zero
     private var trailEmitter: SKEmitterNode?
+    private var groundedSince: TimeInterval?
     private var battlefieldSize: CGSize = .zero
     private var gameCamera: SKCameraNode!
     private let hudNode = SKNode()
@@ -719,6 +720,35 @@ class GameScene: SKScene {
         return node.parent != nil && !node.isHidden && node.alpha >= minimumAlpha
     }
 
+    private func canStartAiming(at location: CGPoint) -> Bool {
+        guard let penguin = penguinNode else { return false }
+
+        let anchorPos = CGPoint(x: slingshotBase.position.x, y: slingshotAnchorLeft.y)
+        let anchorHitZone = CGRect(
+            x: anchorPos.x - 56,
+            y: anchorPos.y - 56,
+            width: 112,
+            height: 112
+        )
+
+        return hitFrame(for: penguin, expandBy: 28).contains(location) || anchorHitZone.contains(location)
+    }
+
+    private func clearGroundedState() {
+        groundedSince = nil
+    }
+
+    private func finishActivePenguin() {
+        guard let penguin = activePenguin else { return }
+
+        penguin.physicsBody = nil
+        penguin.removeFromParent()
+        activePenguin = nil
+        flightState = .stopped
+        clearGroundedState()
+        onPenguinStopped()
+    }
+
     // MARK: - 触摸控制
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -759,8 +789,7 @@ class GameScene: SKScene {
 
         // 开始瞄准
         if flightState == .ready,
-           let penguin = penguinNode,
-           hitFrame(for: penguin, expandBy: 20).contains(location) {
+           canStartAiming(at: location) {
             flightState = .aiming
             trajectoryLine.isHidden = false
         }
@@ -772,7 +801,7 @@ class GameScene: SKScene {
         let location = touch.location(in: self)
         let anchorPos = CGPoint(x: slingshotBase.position.x, y: slingshotAnchorLeft.y)
         var dx = min(location.x, anchorPos.x - 12) - anchorPos.x
-        var dy = min(location.y, anchorPos.y - 12) - anchorPos.y
+        var dy = min(location.y, anchorPos.y - physics.minimumRearPullLift) - anchorPos.y
         let rawDistance = sqrt(dx * dx + dy * dy)
         let scale = rawDistance > physics.maxPullDistance ? physics.maxPullDistance / rawDistance : 1.0
         dx *= scale
@@ -888,6 +917,7 @@ class GameScene: SKScene {
         flightState = .flying
         roundComboCount = 0
         launchTime = CACurrentMediaTime()
+        clearGroundedState()
 
         // 附加飞行轨迹粒子
         trailEmitter = ParticleEffects.shared.attachTrail(to: penguin)
@@ -969,21 +999,25 @@ class GameScene: SKScene {
             pb.velocity.dy = -abs(pb.velocity.dy) * physics.bounceDecay
         }
 
+        let penguinGroundThreshold: CGFloat = 58
+        if penguin.position.y <= penguinGroundThreshold {
+            if groundedSince == nil {
+                groundedSince = currentTime
+            } else if let groundedSince, currentTime - groundedSince >= 2.0 {
+                finishActivePenguin()
+                return
+            }
+        } else {
+            clearGroundedState()
+        }
+
         // 企鹅停止判定
         let timeSinceLaunch = currentTime - launchTime
         if timeSinceLaunch > 10.0 && speed < physics.stopThreshold {
             // 超时强制停止（企鹅被卡住时触发）
-            penguin.physicsBody = nil
-            penguin.removeFromParent()
-            activePenguin = nil
-            flightState = .stopped
-            onPenguinStopped()
+            finishActivePenguin()
         } else if speed < physics.stopThreshold && penguin.position.y < slingshotBase.position.y + 50 {
-            penguin.physicsBody = nil
-            penguin.removeFromParent()
-            activePenguin = nil
-            flightState = .stopped
-            onPenguinStopped()
+            finishActivePenguin()
         }
     }
 
