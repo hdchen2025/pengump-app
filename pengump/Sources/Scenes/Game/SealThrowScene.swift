@@ -3,6 +3,10 @@ import SpriteKit
 
 final class SealThrowScene: SKScene {
     private let distanceMilestones = [100, 300, 800, 1500, 3000]
+    private let readyHintText = "按住任意位置蓄力，松手远投，飞行中还能再点一次扑腾。"
+    private let swingHintText = "松手出手，抡得越久越猛。"
+    private let flapHintText = "飞行中再点一次可扑腾续命。"
+    private let postFlapHintText = "稳住落点，准备下一投。"
 
     var onExit: (() -> Void)?
 
@@ -332,7 +336,7 @@ final class SealThrowScene: SKScene {
 
         hintLabel.fontSize = 16
         hintLabel.fontColor = SKColor(red: 0.23, green: 0.31, blue: 0.40, alpha: 0.8)
-        hintLabel.text = "按住任意位置开始远投，松手出手，飞行中还能再点一次扑腾。"
+        hintLabel.text = readyHintText
 
         distanceLabel.fontSize = 28
         distanceLabel.fontColor = .white
@@ -471,6 +475,7 @@ final class SealThrowScene: SKScene {
         metrics.releaseLabel = ReleaseJudgement.nice.rawValue
         releaseLabel.text = "准备出手"
         releaseLabel.fontColor = SKColor(cgColor: ReleaseJudgement.nice.accentColor)
+        hintLabel.text = readyHintText
         hintLabel.alpha = showHint ? 1.0 : 0.55
         cameraNode.removeAllActions()
         cameraNode.setScale(1.0)
@@ -498,7 +503,8 @@ final class SealThrowScene: SKScene {
         holdDuration = 0
         releaseLabel.text = "松手出手"
         releaseLabel.fontColor = SKColor(red: 1.0, green: 0.95, blue: 0.84, alpha: 1.0)
-        hintLabel.alpha = 0.2
+        hintLabel.text = swingHintText
+        hintLabel.alpha = 0.92
         AudioManager.shared.playButtonTapSound()
     }
 
@@ -507,6 +513,8 @@ final class SealThrowScene: SKScene {
         guard flightController.useFlap(on: &state) else { return }
         flightState = state
         flapLabel.text = "拍击 × \(state.flapsRemaining)"
+        hintLabel.text = postFlapHintText
+        hintLabel.alpha = 0.82
         showFloatingMessage("扑腾续命", color: SKColor(red: 0.78, green: 0.96, blue: 1.0, alpha: 1.0))
         ParticleEffects.shared.playCombo(at: penguinNode.position, in: self)
         AudioManager.shared.playComboSound()
@@ -527,6 +535,8 @@ final class SealThrowScene: SKScene {
         if let penguinTrail {
             penguinNode.addChild(penguinTrail)
         }
+        hintLabel.text = flapHintText
+        hintLabel.alpha = 0.86
 
         AudioManager.shared.playLaunchSound()
         if launch.judgement == .perfect {
@@ -632,6 +642,7 @@ final class SealThrowScene: SKScene {
         let distanceText = "\(roundedDistance)m"
         let message = didBreakRecord ? "新纪录 \(distanceText)" : "本次 \(distanceText)"
         showFloatingMessage(message, color: didBreakRecord ? SKColor(red: 1.0, green: 0.82, blue: 0.42, alpha: 1.0) : .white, duration: 0.9)
+        hintLabel.alpha = 0.9
 
         let outcome = SaveManager.shared.recordDistanceRun(
             distance: roundedDistance,
@@ -1031,6 +1042,7 @@ final class SealThrowScene: SKScene {
 
     private func scheduleAutoRestart(after delay: TimeInterval) {
         cooldownRestartDeadline = timelineTime + delay
+        updateCooldownHint()
     }
 
     private func showFloatingMessage(_ text: String, color: SKColor, duration: TimeInterval = 0.65) {
@@ -1070,6 +1082,8 @@ final class SealThrowScene: SKScene {
     }
 
     private func processCooldownEvents() {
+        updateCooldownHint()
+
         while let nextCelebration = scheduledCelebrations.first, nextCelebration.fireTime <= timelineTime {
             scheduledCelebrations.removeFirst()
             showFloatingMessage(nextCelebration.message.text, color: nextCelebration.message.color, duration: 0.55)
@@ -1078,6 +1092,12 @@ final class SealThrowScene: SKScene {
         if let cooldownRestartDeadline, timelineTime >= cooldownRestartDeadline {
             resetForNextThrow(showHint: false)
         }
+    }
+
+    private func updateCooldownHint() {
+        guard phase == .cooldown, let cooldownRestartDeadline else { return }
+        let remaining = max(0, cooldownRestartDeadline - timelineTime)
+        hintLabel.text = String(format: "点击任意位置立即下一投 · %.1fs 后自动续投", remaining)
     }
 
     private func createPenguinNode() -> SKNode {

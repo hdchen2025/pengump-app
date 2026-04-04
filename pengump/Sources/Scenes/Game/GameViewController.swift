@@ -195,8 +195,9 @@ class GameViewController: UIViewController {
         return button
     }
 
-    private func presentPauseOverlay() {
+    private func presentPauseOverlay(title: String, animated: Bool) {
         let snapshot = scene.pauseSession()
+        pauseTitleLabel.text = title
         pauseSummaryLabel.text = """
         当前距离 \(snapshot.currentDistance)m
         会话 \(snapshot.sessionThrows) 投 · 完美 \(snapshot.sessionPerfectCount) 次 · 会话最佳 \(snapshot.sessionBestDistance)m
@@ -204,9 +205,14 @@ class GameViewController: UIViewController {
         \(snapshot.nextGoalText)
         """
         isPauseOverlayVisible = true
+        pauseButton.isHidden = true
         pauseOverlayView.isHidden = false
-        UIView.animate(withDuration: 0.2) {
-            self.pauseOverlayView.alpha = 1
+        if animated {
+            UIView.animate(withDuration: 0.2) {
+                self.pauseOverlayView.alpha = 1
+            }
+        } else {
+            pauseOverlayView.alpha = 1
         }
     }
 
@@ -216,6 +222,7 @@ class GameViewController: UIViewController {
             self.pauseOverlayView.alpha = 0
         }) { _ in
             self.pauseOverlayView.isHidden = true
+            self.pauseButton.isHidden = false
             if resumeScene {
                 self.scene?.resumeSession()
             }
@@ -225,7 +232,7 @@ class GameViewController: UIViewController {
     @objc private func pauseTapped() {
         AudioManager.shared.playButtonTapSound()
         guard !isPauseOverlayVisible else { return }
-        presentPauseOverlay()
+        presentPauseOverlay(title: "已暂停", animated: true)
     }
 
     @objc private func resumeTapped() {
@@ -246,7 +253,15 @@ class GameViewController: UIViewController {
     }
 
     @objc private func appWillResignActive() {
-        scene?.isPaused = true
+        guard viewIfLoaded?.window != nil else {
+            scene?.isPaused = true
+            return
+        }
+        guard !isPauseOverlayVisible else {
+            scene?.isPaused = true
+            return
+        }
+        presentPauseOverlay(title: "已自动暂停", animated: false)
     }
 
     @objc private func appDidBecomeActive() {
