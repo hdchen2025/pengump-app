@@ -658,6 +658,7 @@ class GameScene: SKScene {
             from: cockedBackAngle + 0.15,
             to: aimAngle + 0.12
         )
+        swingTrailNode.alpha = 1.0
         swingTrailNode.strokeColor = UIColor(
             red: 1.0,
             green: 0.87,
@@ -1019,10 +1020,6 @@ class GameScene: SKScene {
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard flightState == .aiming else { return }
-
-        if let touch = touches.first {
-            updateSwingAim(at: touch.location(in: self))
-        }
 
         if !hasChargedSwing || aimPower < physics.minimumSwingPowerToLaunch {
             aimPower = 0.42
