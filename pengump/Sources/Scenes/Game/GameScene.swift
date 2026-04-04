@@ -6,8 +6,8 @@ struct GamePhysics {
     static let maxPullDistance: CGFloat = 138.0
     static let minPullDistance: CGFloat = 18.0
     static let launchSpeedMultiplier: CGFloat = 0.72
-    static let minimumLaunchSpeed: CGFloat = 58.0
-    static let maxLaunchSpeed: CGFloat = 144.0
+    static let minimumLaunchSpeed: CGFloat = 220.0
+    static let maxLaunchSpeed: CGFloat = 420.0
     static let minimumLaunchAngle: CGFloat = .pi / 12
     static let maximumLaunchAngle: CGFloat = .pi * 0.42
     static let minimumLaunchPowerToFire: CGFloat = 0.10
@@ -564,7 +564,7 @@ class GameScene: SKScene {
     private func penguinReadyPosition(for angle: CGFloat? = nil) -> CGPoint {
         let actualAngle = angle ?? aimAngle
         let pivot = cannonPivotPosition()
-        let loadDistance: CGFloat = 26
+        let loadDistance: CGFloat = 20
         return CGPoint(
             x: pivot.x + cos(actualAngle) * loadDistance,
             y: pivot.y + sin(actualAngle) * loadDistance
@@ -574,7 +574,8 @@ class GameScene: SKScene {
     private func cannonMuzzlePosition(for angle: CGFloat? = nil) -> CGPoint {
         let actualAngle = angle ?? aimAngle
         let pivot = cannonPivotPosition()
-        let barrelLength: CGFloat = 72
+        // Keep the actual projectile spawn clearly beyond the muzzle ring.
+        let barrelLength: CGFloat = 118
         return CGPoint(
             x: pivot.x + cos(actualAngle) * barrelLength,
             y: pivot.y + sin(actualAngle) * barrelLength
@@ -1127,8 +1128,9 @@ class GameScene: SKScene {
         penguin.physicsBody?.categoryBitMask = 0b0010
         penguin.physicsBody?.collisionBitMask = 0b0001 | 0b0100 | 0b1000
         penguin.physicsBody?.contactTestBitMask = 0b0001
-        penguin.physicsBody?.applyImpulse(CGVector(dx: vx, dy: vy))
         penguin.physicsBody?.allowsRotation = true
+        penguin.physicsBody?.usesPreciseCollisionDetection = true
+        penguin.physicsBody?.velocity = CGVector(dx: vx, dy: vy)
 
         activePenguin = penguin
         penguinNode = nil
