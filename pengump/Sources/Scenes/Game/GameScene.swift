@@ -8,6 +8,7 @@ struct GamePhysics {
     static let launchSpeedMultiplier: CGFloat = 0.66
     static let minimumLaunchSpeed: CGFloat = 320.0
     static let maxLaunchSpeed: CGFloat = 760.0
+    static let launchVelocityBoost: CGFloat = 20.0
     static let minimumLaunchAngle: CGFloat = .pi / 5.3
     static let maximumLaunchAngle: CGFloat = .pi * 0.42
     static let minimumLaunchPowerToFire: CGFloat = 0.10
@@ -248,6 +249,7 @@ class GameScene: SKScene {
     private var penguinQueue: [SKSpriteNode] = []
     private var trailEmitter: SKEmitterNode?
     private var groundedSince: TimeInterval?
+    private var lastPenguinPosition: CGPoint?
     private var battlefieldSize: CGSize = .zero
     private var gameCamera: SKCameraNode!
     private let hudNode = SKNode()
@@ -926,6 +928,7 @@ class GameScene: SKScene {
         penguin.physicsBody = nil
         penguin.removeFromParent()
         activePenguin = nil
+        lastPenguinPosition = nil
         flightState = .stopped
         clearGroundedState()
         onPenguinStopped()
@@ -1048,7 +1051,7 @@ class GameScene: SKScene {
     private func launchParameters(angle: CGFloat, power: CGFloat) -> (speed: CGFloat, angle: CGFloat) {
         let curvedPower = CGFloat(pow(Double(max(power, 0)), Double(physics.launchSpeedMultiplier)))
         let speedRange = physics.maxLaunchSpeed - physics.minimumLaunchSpeed
-        let speed = physics.minimumLaunchSpeed + speedRange * curvedPower
+        let speed = (physics.minimumLaunchSpeed + speedRange * curvedPower) * physics.launchVelocityBoost
         return (speed, angle)
     }
 
@@ -1070,19 +1073,20 @@ class GameScene: SKScene {
         let path = CGMutablePath()
         var firstPoint = true
 
-        let timeStep: CGFloat = 0.12
-        for _ in 0..<30 {
+        let sampleCount = 90
+        let timeStep = max(0.004, min(1.0 / 60.0, 32.0 / max(launch.speed, 1)))
+        let gravityStep = abs(physicsWorld.gravity.dy) * timeStep
+        for _ in 0..<sampleCount {
             if firstPoint {
                 path.move(to: CGPoint(x: x, y: y))
                 firstPoint = false
             } else {
                 path.addLine(to: CGPoint(x: x, y: y))
             }
-            vx *= physics.airResistance
-            vy = vy * physics.airResistance - physics.gravity
             x += vx * timeStep
             y += vy * timeStep
-            if y < 0 { break }
+            vy -= gravityStep
+            if y < 0 || x > battlefieldSize.width + 120 || y > battlefieldSize.height + 160 { break }
         }
 
         trajectoryLine.path = path
@@ -1133,6 +1137,7 @@ class GameScene: SKScene {
         penguin.physicsBody?.velocity = CGVector(dx: vx, dy: vy)
 
         activePenguin = penguin
+        lastPenguinPosition = penguin.position
         penguinNode = nil
         flightState = .flying
         roundComboCount = 0
@@ -1324,49 +1329,71 @@ class GameScene: SKScene {
         checkPenguinCollisions()
     }
 
+    private func distanceFromPoint(_ point: CGPoint, toSegmentFrom start: CGPoint, end: CGPoint) -> CGFloat {
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let lengthSquared = dx * dx + dy * dy
+        guard lengthSquared > 0 else {
+            return hypot(point.x - start.x, point.y - start.y)
+        }
+
+        let t = max(0, min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared))
+        let closest = CGPoint(x: start.x + dx * t, y: start.y + dy * t)
+        return hypot(point.x - closest.x, point.y - closest.y)
+    }
+
     private func checkPenguinCollisions() {
         guard let penguin = activePenguin,
               let pb = penguin.physicsBody else { return }
 
         let penguinSpeed = sqrt(pb.velocity.dx * pb.velocity.dx + pb.velocity.dy * pb.velocity.dy)
+        let segmentStart = lastPenguinPosition ?? penguin.position
+        let segmentEnd = penguin.position
+        var closestBlock: IceBlockNode?
+        var closestDistance: CGFloat = .greatestFiniteMagnitude
 
         for block in iceBlocks {
             guard !block.isBreaking else { continue }
-            let distance = hypot(penguin.position.x - block.position.x,
-                                 penguin.position.y - block.position.y)
-            if distance < 42 {
-                let damage = max(1, Int(penguinSpeed / 3))
-                let destroyed = block.takeDamage(damage)
-
-                // 企鹅反弹
-                let angle = atan2(pb.velocity.dy, pb.velocity.dx)
-                let newSpeed = penguinSpeed * physics.bounceDecay
-                pb.velocity.dx = cos(angle) * newSpeed
-                pb.velocity.dy = sin(angle) * newSpeed
-
-                if destroyed {
-                    roundComboCount += 1
-                    addScoreForBlock(block)
-                    AudioManager.shared.playIceBreakSound()
-                    ParticleEffects.shared.playExplosion(at: block.position, in: self)
-                    let blockRef = block
-                    block.playBreakAnimation { [weak self] in
-                        self?.iceBlocks.removeAll { $0 === blockRef }
-                        self?.checkLevelComplete()
-                    }
-
-                    if block.blockType == .explosive {
-                        triggerExplosion(at: block.position, collidedBlock: block)
-                    }
-                }
-
-                if roundComboCount >= 2 {
-                    showComboEffect(count: roundComboCount, at: block.position)
-                    ParticleEffects.shared.playCombo(at: block.position, in: self)
-                }
-                break
+            let distance = distanceFromPoint(block.position, toSegmentFrom: segmentStart, end: segmentEnd)
+            if distance < 42, distance < closestDistance {
+                closestDistance = distance
+                closestBlock = block
             }
         }
+
+        if let block = closestBlock {
+            let damage = max(1, Int(penguinSpeed / 3))
+            let destroyed = block.takeDamage(damage)
+
+            // 企鹅反弹
+            let angle = atan2(pb.velocity.dy, pb.velocity.dx)
+            let newSpeed = penguinSpeed * physics.bounceDecay
+            pb.velocity.dx = cos(angle) * newSpeed
+            pb.velocity.dy = sin(angle) * newSpeed
+
+            if destroyed {
+                roundComboCount += 1
+                addScoreForBlock(block)
+                AudioManager.shared.playIceBreakSound()
+                ParticleEffects.shared.playExplosion(at: block.position, in: self)
+                let blockRef = block
+                block.playBreakAnimation { [weak self] in
+                    self?.iceBlocks.removeAll { $0 === blockRef }
+                    self?.checkLevelComplete()
+                }
+
+                if block.blockType == .explosive {
+                    triggerExplosion(at: block.position, collidedBlock: block)
+                }
+            }
+
+            if roundComboCount >= 2 {
+                showComboEffect(count: roundComboCount, at: block.position)
+                ParticleEffects.shared.playCombo(at: block.position, in: self)
+            }
+        }
+
+        lastPenguinPosition = penguin.position
     }
 
     private func triggerExplosion(at position: CGPoint, collidedBlock: IceBlockNode? = nil) {
