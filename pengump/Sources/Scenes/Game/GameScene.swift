@@ -5,8 +5,11 @@ import SpriteKit
 struct GamePhysics {
     static let maxPullDistance: CGFloat = 138.0
     static let minPullDistance: CGFloat = 18.0
-    static let launchSpeedMultiplier: CGFloat = 0.18
-    static let maxLaunchSpeed: CGFloat = 24.0
+    static let launchSpeedMultiplier: CGFloat = 0.72
+    static let minimumLaunchSpeed: CGFloat = 40.0
+    static let maxLaunchSpeed: CGFloat = 96.0
+    static let minimumRearPullLift: CGFloat = 28.0
+    static let minimumRearPullAngle: CGFloat = .pi / 4.6
     static let gravity: CGFloat = 0.22
     static let airResistance: CGFloat = 0.992
     static let rubberBandElasticity: CGFloat = 0.4
@@ -769,7 +772,7 @@ class GameScene: SKScene {
         let location = touch.location(in: self)
         let anchorPos = CGPoint(x: slingshotBase.position.x, y: slingshotAnchorLeft.y)
         var dx = min(location.x, anchorPos.x - 12) - anchorPos.x
-        var dy = location.y - anchorPos.y
+        var dy = min(location.y, anchorPos.y - 12) - anchorPos.y
         let rawDistance = sqrt(dx * dx + dy * dy)
         let scale = rawDistance > physics.maxPullDistance ? physics.maxPullDistance / rawDistance : 1.0
         dx *= scale
@@ -816,19 +819,29 @@ class GameScene: SKScene {
 
     // MARK: - 发射逻辑
 
+    private func launchParameters(for penguinPosition: CGPoint) -> (speed: CGFloat, angle: CGFloat) {
+        let anchorPos = CGPoint(x: slingshotBase.position.x, y: slingshotAnchorLeft.y)
+        let dx = anchorPos.x - penguinPosition.x
+        let dy = anchorPos.y - penguinPosition.y
+        let adjustedDY = max(dy, physics.minimumRearPullLift)
+        let distance = sqrt(dx * dx + adjustedDY * adjustedDY)
+
+        var speed = max(distance * physics.launchSpeedMultiplier, physics.minimumLaunchSpeed)
+        speed = min(speed, physics.maxLaunchSpeed)
+
+        let maximumLaunchAngle: CGFloat = .pi * 0.72
+        let rawAngle = atan2(adjustedDY, dx)
+        let angle = min(max(rawAngle, physics.minimumRearPullAngle), maximumLaunchAngle)
+
+        return (speed, angle)
+    }
+
     private func drawTrajectory() {
         guard let penguin = penguinNode else { return }
 
-        let anchorPos = CGPoint(x: slingshotBase.position.x, y: slingshotAnchorLeft.y)
-        let dx = anchorPos.x - penguin.position.x
-        let dy = anchorPos.y - penguin.position.y
-
-        var speed = sqrt(dx * dx + dy * dy) * physics.launchSpeedMultiplier
-        speed = min(speed, physics.maxLaunchSpeed)
-
-        let angle = atan2(dy, dx)
-        var vx = cos(angle) * speed
-        var vy = sin(angle) * speed
+        let launch = launchParameters(for: penguin.position)
+        var vx = cos(launch.angle) * launch.speed
+        var vy = sin(launch.angle) * launch.speed
 
         var x = penguin.position.x
         var y = penguin.position.y
@@ -836,7 +849,8 @@ class GameScene: SKScene {
         let path = CGMutablePath()
         var firstPoint = true
 
-        for _ in 0..<15 {
+        let timeStep: CGFloat = 0.12
+        for _ in 0..<30 {
             if firstPoint {
                 path.move(to: CGPoint(x: x, y: y))
                 firstPoint = false
@@ -845,8 +859,8 @@ class GameScene: SKScene {
             }
             vx *= physics.airResistance
             vy = vy * physics.airResistance - physics.gravity
-            x += vx * 3
-            y += vy * 3
+            x += vx * timeStep
+            y += vy * timeStep
             if y < 0 { break }
         }
 
@@ -856,16 +870,9 @@ class GameScene: SKScene {
     private func launchPenguin() {
         guard let penguin = penguinNode else { return }
 
-        let anchorPos = CGPoint(x: slingshotBase.position.x, y: slingshotAnchorLeft.y)
-        let dx = anchorPos.x - penguin.position.x
-        let dy = anchorPos.y - penguin.position.y
-
-        var speed = sqrt(dx * dx + dy * dy) * physics.launchSpeedMultiplier
-        speed = min(speed, physics.maxLaunchSpeed)
-
-        let angle = atan2(dy, dx)
-        let vx = cos(angle) * speed
-        let vy = sin(angle) * speed
+        let launch = launchParameters(for: penguin.position)
+        let vx = cos(launch.angle) * launch.speed
+        let vy = sin(launch.angle) * launch.speed
 
         penguin.physicsBody = SKPhysicsBody(circleOfRadius: 16)
         penguin.physicsBody?.isDynamic = true
