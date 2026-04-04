@@ -10,6 +10,26 @@ struct EnvironmentProfile {
     let friction: CGFloat
 }
 
+enum EnvironmentFeatureKind {
+    case fishBoost
+    case iceSpring
+
+    var label: String {
+        switch self {
+        case .fishBoost:
+            return "鱼群助推"
+        case .iceSpring:
+            return "冰裂弹板"
+        }
+    }
+}
+
+struct EnvironmentFeature {
+    let id: String
+    let kind: EnvironmentFeatureKind
+    let worldX: CGFloat
+}
+
 final class EnvironmentController {
     private let profiles: [(threshold: CGFloat, profile: EnvironmentProfile)] = [
         (
@@ -81,5 +101,40 @@ final class EnvironmentController {
     func surface(at distance: CGFloat) -> GroundSurface {
         let profile = profile(for: distance)
         return GroundSurface(bounce: profile.bounce, friction: profile.friction)
+    }
+
+    func features(in range: ClosedRange<CGFloat>) -> [EnvironmentFeature] {
+        let chunkSize: CGFloat = 240
+        let startChunk = max(1, Int(floor(range.lowerBound / chunkSize)) - 1)
+        let endChunk = Int(ceil(range.upperBound / chunkSize)) + 1
+        var features: [EnvironmentFeature] = []
+
+        for chunk in startChunk...endChunk {
+            let baseX = CGFloat(chunk) * chunkSize
+            let distance = max(0, (baseX - 170) * 0.42)
+            let biome = biomeIndex(for: distance)
+
+            if chunk >= 2 && chunk % 3 == 2 {
+                features.append(
+                    EnvironmentFeature(
+                        id: "fish-\(chunk)",
+                        kind: .fishBoost,
+                        worldX: baseX + 92
+                    )
+                )
+            }
+
+            if biome >= 1 && chunk % 4 == 2 {
+                features.append(
+                    EnvironmentFeature(
+                        id: "spring-\(chunk)",
+                        kind: .iceSpring,
+                        worldX: baseX + 148
+                    )
+                )
+            }
+        }
+
+        return features.filter { range.contains($0.worldX) }
     }
 }

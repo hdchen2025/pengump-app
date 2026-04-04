@@ -39,6 +39,20 @@ struct FlightController {
         return true
     }
 
+    mutating func applyFishBoost(on body: inout FlightBody) {
+        body.velocity.dx += 430
+        body.velocity.dy = max(body.velocity.dy, 120)
+        body.isGrounded = false
+        body.groundedDuration = 0
+    }
+
+    mutating func applyIceSpring(on body: inout FlightBody) {
+        body.velocity.dy = max(abs(body.velocity.dy) * 0.62, 660)
+        body.velocity.dx *= 1.08
+        body.isGrounded = false
+        body.groundedDuration = 0
+    }
+
     mutating func step(body: inout FlightBody, dt: CGFloat, groundHeight: CGFloat, surface: GroundSurface) -> FlightStepResult {
         var result = FlightStepResult()
         body.elapsedTime += TimeInterval(dt)

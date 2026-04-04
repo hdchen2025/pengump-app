@@ -1,6 +1,8 @@
 import SpriteKit
 
 final class SealThrowScene: SKScene {
+    private let distanceMilestones = [100, 300, 800, 1500, 3000]
+
     var onExit: (() -> Void)?
 
     private enum Phase {
@@ -15,8 +17,10 @@ final class SealThrowScene: SKScene {
     private var metrics = RunMetrics()
 
     private let worldNode = SKNode()
+    private let featureNode = SKNode()
     private let hudNode = SKNode()
     private let cameraNode = SKCameraNode()
+    private let speedLinesNode = SKNode()
 
     private let launchBaseX: CGFloat = 170
     private var shoulderPoint: CGPoint = .zero
@@ -25,6 +29,14 @@ final class SealThrowScene: SKScene {
     private var lastUpdateTime: TimeInterval = 0
     private var holdDuration: TimeInterval = 0
     private var flightState: FlightBody?
+    private var speedLineSprites: [SKSpriteNode] = []
+    private var speedLinesPhase: CGFloat = 0
+    private var slowMotionTimer: CGFloat = 0
+    private var didCelebrateRecord = false
+    private var nextMilestoneIndex = 0
+    private var currentBiomeIndex = 0
+    private var renderedFeatures: [String: SKNode] = [:]
+    private var triggeredFeatureIDs: Set<String> = []
 
     private var skyNode: SKSpriteNode!
     private var horizonNode: SKSpriteNode!
@@ -54,6 +66,7 @@ final class SealThrowScene: SKScene {
         horizonNode?.size = CGSize(width: size.width * 1.5, height: size.height * 0.45)
         updateGroundPath(centerX: cameraNode.position.x)
         layoutHUD()
+        layoutSpeedLines()
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -89,18 +102,22 @@ final class SealThrowScene: SKScene {
     }
 
     override func update(_ currentTime: TimeInterval) {
-        let dt = max(1.0 / 120.0, min(1.0 / 30.0, currentTime - lastUpdateTime))
+        let rawDt = max(1.0 / 120.0, min(1.0 / 30.0, currentTime - lastUpdateTime))
         lastUpdateTime = currentTime
+        let dt = scaledDeltaTime(from: rawDt)
 
         switch phase {
         case .ready:
             updateIdlePose(currentTime: currentTime)
+            updateSpeedLines(forwardSpeed: 0, dt: CGFloat(rawDt))
         case .swinging:
             holdDuration += dt
             updateSwingPose()
+            updateSpeedLines(forwardSpeed: 0, dt: CGFloat(rawDt))
         case .flying:
             updateFlight(dt: CGFloat(dt))
         case .cooldown:
+            updateSpeedLines(forwardSpeed: 0, dt: CGFloat(rawDt))
             break
         }
     }
@@ -112,6 +129,8 @@ final class SealThrowScene: SKScene {
         camera = cameraNode
         cameraNode.position = CGPoint(x: size.width * 0.5, y: size.height * 0.5)
         addChild(cameraNode)
+        speedLinesNode.zPosition = -18
+        cameraNode.addChild(speedLinesNode)
         cameraNode.addChild(hudNode)
 
         let appearance = environmentController.profile(for: 0)
@@ -129,11 +148,16 @@ final class SealThrowScene: SKScene {
         groundNode = SKShapeNode()
         groundNode.zPosition = -5
         worldNode.addChild(groundNode)
+        featureNode.zPosition = 4
+        worldNode.addChild(featureNode)
 
         setupSeal()
+        setupSpeedLines()
         setupHUD()
         layoutHUD()
+        layoutSpeedLines()
         updateGroundPath(centerX: cameraNode.position.x)
+        updateFeatureNodes(aroundX: cameraNode.position.x)
     }
 
     private func setupSeal() {
@@ -222,7 +246,7 @@ final class SealThrowScene: SKScene {
 
         hintLabel.fontSize = 16
         hintLabel.fontColor = SKColor(red: 0.23, green: 0.31, blue: 0.40, alpha: 0.8)
-        hintLabel.text = "按住开始抡臂，松手出手，飞行中还能再点一次扑腾。"
+        hintLabel.text = "按住任意位置开始远投，松手出手，飞行中还能再点一次扑腾。"
 
         distanceLabel.fontSize = 28
         distanceLabel.fontColor = .white
@@ -264,11 +288,45 @@ final class SealThrowScene: SKScene {
         backLabel.position = CGPoint(x: left, y: top - 96)
     }
 
+    private func setupSpeedLines() {
+        speedLinesNode.removeAllChildren()
+        speedLineSprites = (0..<8).map { index in
+            let line = SKSpriteNode(color: .white, size: CGSize(width: 88 + CGFloat(index % 3) * 24, height: 3))
+            line.alpha = 0
+            line.zRotation = -.pi * 0.12
+            line.blendMode = .add
+            speedLinesNode.addChild(line)
+            return line
+        }
+    }
+
+    private func layoutSpeedLines() {
+        let left = -size.width * 0.5
+        let right = size.width * 0.5
+        let top = size.height * 0.5
+
+        for (index, line) in speedLineSprites.enumerated() {
+            let normalizedY = CGFloat(index) / CGFloat(max(1, speedLineSprites.count - 1))
+            line.position = CGPoint(
+                x: left + (right - left) * (0.18 + CGFloat(index % 4) * 0.18),
+                y: top - 70 - normalizedY * max(140, size.height * 0.52)
+            )
+        }
+    }
+
     private func resetForNextThrow(showHint: Bool) {
         removeAction(forKey: "autoRestart")
         phase = .ready
         holdDuration = 0
         flightState = nil
+        slowMotionTimer = 0
+        didCelebrateRecord = false
+        nextMilestoneIndex = 0
+        currentBiomeIndex = 0
+        speedLinesPhase = 0
+        triggeredFeatureIDs.removeAll()
+        renderedFeatures.values.forEach { $0.removeFromParent() }
+        renderedFeatures.removeAll()
         penguinTrail?.removeFromParent()
         penguinTrail = nil
 
@@ -282,6 +340,8 @@ final class SealThrowScene: SKScene {
         releaseLabel.text = "准备出手"
         releaseLabel.fontColor = SKColor(cgColor: ReleaseJudgement.nice.accentColor)
         hintLabel.alpha = showHint ? 1.0 : 0.55
+        cameraNode.removeAllActions()
+        cameraNode.setScale(1.0)
         cameraNode.position = CGPoint(x: size.width * 0.52, y: size.height * 0.52)
         messageLabel.removeAllActions()
         messageLabel.alpha = 0
@@ -290,6 +350,8 @@ final class SealThrowScene: SKScene {
         updateEnvironment(for: profile)
         updateGroundPath(centerX: max(cameraNode.position.x, size.width * 0.5))
         updateArmPath(to: penguinNode.position)
+        updateSpeedLines(forwardSpeed: 0, dt: 0)
+        updateFeatureNodes(aroundX: cameraNode.position.x)
     }
 
     private func beginSwing() {
@@ -329,6 +391,7 @@ final class SealThrowScene: SKScene {
 
         AudioManager.shared.playLaunchSound()
         if launch.judgement == .perfect {
+            triggerLaunchCinematic()
             ParticleEffects.shared.playStarBurst(at: penguinNode.position, in: self)
             showFloatingMessage("完美出手", color: SKColor(cgColor: launch.judgement.accentColor))
         } else {
@@ -363,13 +426,23 @@ final class SealThrowScene: SKScene {
     private func updateFlight(dt: CGFloat) {
         guard var state = flightState else { return }
 
+        let previousPosition = state.position
         let groundHeight = environmentController.groundHeight(at: state.position.x)
-        let result = flightController.step(
+        var result = flightController.step(
             body: &state,
             dt: dt,
             groundHeight: groundHeight,
             surface: environmentController.surface(at: metrics.currentDistance)
         )
+
+        if let triggeredFeature = triggerFeatureIfNeeded(on: &state, previousPosition: previousPosition) {
+            metrics.registerInteraction()
+            result.didStop = false
+            showFloatingMessage(triggeredFeature.kind.label, color: featureAccentColor(for: triggeredFeature.kind), duration: 0.48)
+            ParticleEffects.shared.playCombo(at: state.position, in: self)
+            AudioManager.shared.playComboSound()
+            pulseCamera(scale: 0.95)
+        }
         flightState = state
 
         penguinNode.position = state.position
@@ -388,7 +461,16 @@ final class SealThrowScene: SKScene {
         updateEnvironment(for: profile)
         updateHUD(for: profile, flapsRemaining: state.flapsRemaining)
         updateGroundPath(centerX: state.position.x + size.width * 0.18)
-        updateCamera(targetX: max(size.width * 0.5, state.position.x + size.width * 0.18), targetY: size.height * 0.52 + min(90, max(0, state.position.y - 180) * 0.10))
+        let leadX = min(280, max(size.width * 0.18, abs(state.velocity.dx) * 0.16))
+        let leadY = min(120, max(0, state.position.y - 180) * 0.10 + max(0, state.velocity.dy) * 0.04)
+        updateCamera(
+            targetX: max(size.width * 0.5, state.position.x + leadX),
+            targetY: size.height * 0.52 + leadY
+        )
+        updateSpeedLines(forwardSpeed: max(0, state.velocity.dx), dt: dt)
+        updateFeatureNodes(aroundX: state.position.x + size.width * 0.18)
+        celebrateBiomeShiftIfNeeded(profile: profile)
+        celebrateProgressIfNeeded(profile: profile)
 
         if result.didBounce {
             AudioManager.shared.playIceHitSound()
@@ -434,7 +516,11 @@ final class SealThrowScene: SKScene {
     private func updateHUD(for profile: EnvironmentProfile, flapsRemaining: Int) {
         distanceLabel.text = "本次 \(Int(metrics.currentDistance.rounded()))m"
         bestLabel.text = "最佳 \(Int(metrics.bestDistance.rounded()))m"
-        flapLabel.text = "拍击 × \(flapsRemaining)"
+        if metrics.interactionCount > 0 {
+            flapLabel.text = "拍击 × \(flapsRemaining) · 连锁 \(metrics.interactionCount)"
+        } else {
+            flapLabel.text = "拍击 × \(flapsRemaining)"
+        }
         biomeLabel.text = profile.name
     }
 
@@ -451,6 +537,202 @@ final class SealThrowScene: SKScene {
         let target = CGPoint(x: targetX, y: max(size.height * 0.5, targetY))
         cameraNode.position.x += (target.x - cameraNode.position.x) * 0.12
         cameraNode.position.y += (target.y - cameraNode.position.y) * 0.12
+    }
+
+    private func updateSpeedLines(forwardSpeed: CGFloat, dt: CGFloat) {
+        let intensity = min(1.0, max(0, (forwardSpeed - 480) / 820))
+        speedLinesPhase += max(0, forwardSpeed) * max(0.002, dt * 0.028)
+
+        for (index, line) in speedLineSprites.enumerated() {
+            let baseX = -size.width * 0.5 + size.width * (0.18 + CGFloat(index % 4) * 0.18)
+            let offset = (speedLinesPhase + CGFloat(index) * 38).truncatingRemainder(dividingBy: 180)
+            line.position.x = baseX - offset
+            line.alpha = intensity * (0.22 + CGFloat(index % 3) * 0.12)
+            line.xScale = 0.72 + intensity * 0.95
+        }
+    }
+
+    private func celebrateProgressIfNeeded(profile: EnvironmentProfile) {
+        if metrics.didBeatBest && !didCelebrateRecord {
+            didCelebrateRecord = true
+            showFloatingMessage("破纪录了", color: SKColor(red: 1.0, green: 0.84, blue: 0.38, alpha: 1.0), duration: 0.55)
+            AudioManager.shared.playGameWinSound()
+            triggerRecordCinematic()
+        }
+
+        while nextMilestoneIndex < distanceMilestones.count && metrics.currentDistance >= CGFloat(distanceMilestones[nextMilestoneIndex]) {
+            let milestone = distanceMilestones[nextMilestoneIndex]
+            nextMilestoneIndex += 1
+            ParticleEffects.shared.playStarBurst(at: penguinNode.position, in: self)
+            AudioManager.shared.playComboSound()
+            showFloatingMessage("冲破 \(milestone)m", color: profile.accentColor, duration: 0.55)
+            pulseCamera(scale: 0.95)
+        }
+    }
+
+    private func celebrateBiomeShiftIfNeeded(profile: EnvironmentProfile) {
+        let biomeIndex = environmentController.biomeIndex(for: metrics.currentDistance)
+        guard biomeIndex > currentBiomeIndex else { return }
+
+        currentBiomeIndex = biomeIndex
+        showFloatingMessage(profile.name, color: profile.accentColor, duration: 0.5)
+        pulseCamera(scale: 0.96)
+        AudioManager.shared.playComboSound()
+    }
+
+    private func triggerLaunchCinematic() {
+        slowMotionTimer = max(slowMotionTimer, 0.12)
+        pulseCamera(scale: 0.94)
+    }
+
+    private func triggerRecordCinematic() {
+        slowMotionTimer = max(slowMotionTimer, 0.22)
+        pulseCamera(scale: 0.92)
+    }
+
+    private func pulseCamera(scale: CGFloat) {
+        cameraNode.removeAction(forKey: "cameraPulse")
+        cameraNode.run(
+            SKAction.sequence([
+                SKAction.scale(to: scale, duration: 0.08),
+                SKAction.scale(to: 1.0, duration: 0.18)
+            ]),
+            withKey: "cameraPulse"
+        )
+    }
+
+    private func scaledDeltaTime(from rawDt: TimeInterval) -> TimeInterval {
+        guard slowMotionTimer > 0 else { return rawDt }
+        slowMotionTimer = max(0, slowMotionTimer - CGFloat(rawDt))
+        return rawDt * 0.42
+    }
+
+    private func updateFeatureNodes(aroundX centerX: CGFloat) {
+        let features = environmentController.features(in: featureRange(aroundX: centerX))
+        let visibleIDs = Set(features.map(\.id))
+
+        let staleIDs = renderedFeatures.keys.filter { !visibleIDs.contains($0) || triggeredFeatureIDs.contains($0) }
+        for id in staleIDs {
+            renderedFeatures[id]?.removeFromParent()
+            renderedFeatures.removeValue(forKey: id)
+        }
+
+        for feature in features where !triggeredFeatureIDs.contains(feature.id) && renderedFeatures[feature.id] == nil {
+            let node = makeFeatureNode(for: feature)
+            renderedFeatures[feature.id] = node
+            featureNode.addChild(node)
+        }
+    }
+
+    private func triggerFeatureIfNeeded(on body: inout FlightBody, previousPosition: CGPoint) -> EnvironmentFeature? {
+        let lowerBound = min(previousPosition.x, body.position.x) - 40
+        let upperBound = max(previousPosition.x, body.position.x) + 40
+        let nearbyFeatures = environmentController.features(in: lowerBound...upperBound)
+
+        for feature in nearbyFeatures where !triggeredFeatureIDs.contains(feature.id) {
+            let anchor = featureAnchorPoint(for: feature)
+            guard segmentDistance(from: previousPosition, to: body.position, point: anchor) < 44 else { continue }
+
+            triggeredFeatureIDs.insert(feature.id)
+            if let node = renderedFeatures.removeValue(forKey: feature.id) {
+                node.run(
+                    SKAction.sequence([
+                        SKAction.scale(to: 1.16, duration: 0.06),
+                        SKAction.fadeOut(withDuration: 0.16),
+                        SKAction.removeFromParent()
+                    ])
+                )
+            }
+
+            switch feature.kind {
+            case .fishBoost:
+                flightController.applyFishBoost(on: &body)
+            case .iceSpring:
+                flightController.applyIceSpring(on: &body)
+            }
+
+            return feature
+        }
+
+        return nil
+    }
+
+    private func segmentDistance(from start: CGPoint, to end: CGPoint, point: CGPoint) -> CGFloat {
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let lengthSquared = dx * dx + dy * dy
+
+        guard lengthSquared > 0.001 else {
+            return hypot(point.x - start.x, point.y - start.y)
+        }
+
+        let projection = ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared
+        let clampedProjection = max(0, min(1, projection))
+        let closest = CGPoint(x: start.x + dx * clampedProjection, y: start.y + dy * clampedProjection)
+        return hypot(point.x - closest.x, point.y - closest.y)
+    }
+
+    private func makeFeatureNode(for feature: EnvironmentFeature) -> SKNode {
+        let root = SKNode()
+        root.position = featureAnchorPoint(for: feature)
+        root.name = feature.id
+
+        switch feature.kind {
+        case .fishBoost:
+            for index in 0..<3 {
+                let fish = SKShapeNode(ellipseOf: CGSize(width: 18, height: 10))
+                fish.fillColor = SKColor(red: 0.24, green: 0.72, blue: 0.96, alpha: 1.0)
+                fish.strokeColor = SKColor(red: 0.08, green: 0.34, blue: 0.58, alpha: 1.0)
+                fish.lineWidth = 1.5
+                fish.position = CGPoint(x: CGFloat(index) * 14, y: sin(CGFloat(index)) * 4)
+                root.addChild(fish)
+            }
+        case .iceSpring:
+            let plate = SKShapeNode(rectOf: CGSize(width: 34, height: 10), cornerRadius: 4)
+            plate.fillColor = SKColor(red: 0.48, green: 0.92, blue: 1.0, alpha: 1.0)
+            plate.strokeColor = SKColor(red: 0.11, green: 0.48, blue: 0.63, alpha: 1.0)
+            plate.lineWidth = 2
+            root.addChild(plate)
+
+            let spikePath = CGMutablePath()
+            spikePath.move(to: CGPoint(x: -14, y: 0))
+            spikePath.addLine(to: CGPoint(x: 0, y: 22))
+            spikePath.addLine(to: CGPoint(x: 14, y: 0))
+            spikePath.closeSubpath()
+
+            let spike = SKShapeNode(path: spikePath)
+            spike.fillColor = SKColor(red: 0.86, green: 0.98, blue: 1.0, alpha: 1.0)
+            spike.strokeColor = SKColor(red: 0.22, green: 0.52, blue: 0.7, alpha: 1.0)
+            spike.lineWidth = 2
+            spike.position = CGPoint(x: 0, y: 8)
+            root.addChild(spike)
+        }
+
+        return root
+    }
+
+    private func featureAnchorPoint(for feature: EnvironmentFeature) -> CGPoint {
+        let groundY = environmentController.groundHeight(at: feature.worldX)
+        switch feature.kind {
+        case .fishBoost:
+            return CGPoint(x: feature.worldX, y: groundY + 24)
+        case .iceSpring:
+            return CGPoint(x: feature.worldX, y: groundY + 8)
+        }
+    }
+
+    private func featureAccentColor(for kind: EnvironmentFeatureKind) -> SKColor {
+        switch kind {
+        case .fishBoost:
+            return SKColor(red: 0.38, green: 0.88, blue: 1.0, alpha: 1.0)
+        case .iceSpring:
+            return SKColor(red: 0.76, green: 0.96, blue: 1.0, alpha: 1.0)
+        }
+    }
+
+    private func featureRange(aroundX centerX: CGFloat) -> ClosedRange<CGFloat> {
+        let halfWidth = max(size.width, 420)
+        return max(0, centerX - halfWidth)...(centerX + halfWidth)
     }
 
     private func updateGroundPath(centerX: CGFloat) {

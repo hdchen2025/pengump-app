@@ -8,7 +8,7 @@ class MenuViewController: UIViewController {
 
     private lazy var logoLabel: UILabel = {
         let label = UILabel()
-        label.text = "🦭 海豹甩企鹅"
+        label.text = "🐧 企鹅飞多远"
         label.font = .systemFont(ofSize: 48, weight: .bold)
         label.textColor = UIColor(red: 0.14, green: 0.32, blue: 0.58, alpha: 1.0)
         label.textAlignment = .center
@@ -17,7 +17,7 @@ class MenuViewController: UIViewController {
 
     private lazy var statusLabel: UILabel = {
         let label = UILabel()
-        label.numberOfLines = 3
+        label.numberOfLines = 4
         label.font = .systemFont(ofSize: 16, weight: .medium)
         label.textColor = UIColor(red: 0.31, green: 0.39, blue: 0.49, alpha: 1.0)
         label.textAlignment = .center
@@ -26,7 +26,7 @@ class MenuViewController: UIViewController {
 
     private lazy var startButton: UIButton = {
         let button = UIButton(type: .system)
-        button.setTitle("开始首投", for: .normal)
+        button.setTitle("开始远投", for: .normal)
         button.titleLabel?.font = .systemFont(ofSize: 24, weight: .semibold)
         button.backgroundColor = UIColor(red: 0.16, green: 0.46, blue: 0.78, alpha: 1.0)
         button.setTitleColor(.white, for: .normal)
@@ -173,21 +173,24 @@ class MenuViewController: UIViewController {
         let bestDistance = saveManager.bestDistance
         let totalThrows = saveManager.totalThrows
         let latestRun = saveManager.latestDistanceRecord
+        let milestoneText = milestoneSummary(for: bestDistance)
 
-        startButton.setTitle(totalThrows > 0 ? "再来一投" : "开始首投", for: .normal)
+        startButton.setTitle(totalThrows > 0 ? "再来远投" : "开始远投", for: .normal)
 
         if let latestRun {
             statusLabel.text = """
             全局最佳 \(bestDistance)m
             最近一投 \(latestRun.distance)m · \(releaseSummary(for: latestRun))
             累计远投 \(totalThrows) 次
+            \(milestoneText)
             """
             return
         }
 
         statusLabel.text = """
-        直接挑战最远距离
-        短局结算后立刻开下一投
+        目标先冲过 \(DistanceMilestones.all.first ?? 100)m
+        自动结算后立刻下一投
+        \(milestoneText)
         """
     }
 
@@ -209,5 +212,12 @@ class MenuViewController: UIViewController {
         default:
             return "雪地起跑"
         }
+    }
+
+    private func milestoneSummary(for bestDistance: Int) -> String {
+        if let next = DistanceMilestones.next(after: bestDistance) {
+            return "下一里程碑 \(next)m · 还差 \(max(0, next - bestDistance))m"
+        }
+        return "已冲破所有基础里程碑"
     }
 }

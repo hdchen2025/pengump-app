@@ -143,7 +143,13 @@ class LeaderboardManager {
 
     private func statsText(from saveManager: SaveManager) -> String {
         let bestBiome = biomeTitle(for: saveManager.highestBiomeReached)
-        return "累计 \(saveManager.totalThrows) 次 · 完美出手 \(saveManager.perfectReleaseCount) 次\n最远冲到 \(bestBiome)"
+        let milestoneText: String
+        if let next = DistanceMilestones.next(after: saveManager.bestDistance) {
+            milestoneText = "下一里程碑 \(next)m"
+        } else {
+            milestoneText = "已冲破基础里程碑"
+        }
+        return "累计 \(saveManager.totalThrows) 次 · 完美出手 \(saveManager.perfectReleaseCount) 次\n最远冲到 \(bestBiome) · \(milestoneText)"
     }
 
     private func biomeTitle(for highestBiome: Int) -> String {
