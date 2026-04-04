@@ -1,3 +1,4 @@
+import Foundation
 import SpriteKit
 
 final class SealThrowScene: SKScene {
@@ -5,9 +6,25 @@ final class SealThrowScene: SKScene {
 
     var onExit: (() -> Void)?
 
+    struct PauseSnapshot {
+        let currentDistance: Int
+        let sessionThrows: Int
+        let sessionBestDistance: Int
+        let sessionPerfectCount: Int
+        let challengeTitle: String
+        let challengeBest: Int
+        let challengeTarget: Int
+        let nextGoalText: String
+    }
+
     private struct CelebrationMessage {
         let text: String
         let color: SKColor
+    }
+
+    private struct ScheduledCelebration {
+        let fireTime: TimeInterval
+        let message: CelebrationMessage
     }
 
     private enum Phase {
@@ -29,20 +46,27 @@ final class SealThrowScene: SKScene {
     private let speedLinesNode = SKNode()
 
     private let launchBaseX: CGFloat = 170
+    private let minimumRunSummaryDuration: TimeInterval = 2.3
     private var shoulderPoint: CGPoint = .zero
 
     private var phase: Phase = .ready
     private var lastUpdateTime: TimeInterval = 0
+    private var timelineTime: TimeInterval = 0
     private var holdDuration: TimeInterval = 0
     private var flightState: FlightBody?
     private var speedLineSprites: [SKSpriteNode] = []
     private var speedLinesPhase: CGFloat = 0
     private var slowMotionTimer: CGFloat = 0
     private var didCelebrateRecord = false
+    private var sessionThrowCount = 0
+    private var sessionBestDistance = 0
+    private var sessionPerfectCount = 0
     private var nextMilestoneIndex = 0
     private var currentBiomeIndex = 0
     private var renderedFeatures: [String: SKNode] = [:]
     private var triggeredFeatureIDs: Set<String> = []
+    private var scheduledCelebrations: [ScheduledCelebration] = []
+    private var cooldownRestartDeadline: TimeInterval?
 
     private var skyNode: SKSpriteNode!
     private var horizonNode: SKSpriteNode!
@@ -55,14 +79,21 @@ final class SealThrowScene: SKScene {
     private var distanceLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
     private var bestLabel = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
     private var flapLabel = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
+    private var sessionLabel = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
+    private var objectiveLabel = SKLabelNode(fontNamed: "AvenirNext-Medium")
     private var biomeLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
     private var releaseLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
     private var backLabel = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
+    private var recapCard = SKShapeNode()
+    private var recapTitleLabel = SKLabelNode(fontNamed: "AvenirNext-Bold")
+    private var recapDetailLabel = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
+    private var recapFooterLabel = SKLabelNode(fontNamed: "AvenirNext-Medium")
     private var penguinTrail: SKEmitterNode?
 
     override func didMove(to view: SKView) {
         scaleMode = .resizeFill
         setupScene()
+        resetSessionProgress()
         resetForNextThrow(showHint: true)
     }
 
@@ -90,7 +121,9 @@ final class SealThrowScene: SKScene {
             beginSwing()
         case .flying:
             triggerFlap()
-        case .swinging, .cooldown:
+        case .cooldown:
+            resetForNextThrow(showHint: false)
+        case .swinging:
             break
         }
     }
@@ -110,6 +143,7 @@ final class SealThrowScene: SKScene {
     override func update(_ currentTime: TimeInterval) {
         let rawDt = max(1.0 / 120.0, min(1.0 / 30.0, currentTime - lastUpdateTime))
         lastUpdateTime = currentTime
+        timelineTime += rawDt
         let dt = scaledDeltaTime(from: rawDt)
 
         switch phase {
@@ -124,8 +158,54 @@ final class SealThrowScene: SKScene {
             updateFlight(dt: CGFloat(dt))
         case .cooldown:
             updateSpeedLines(forwardSpeed: 0, dt: CGFloat(rawDt))
+            processCooldownEvents()
             break
         }
+    }
+
+    func restartSession() {
+        isPaused = false
+        removeAllActions()
+        cameraNode.removeAllActions()
+        messageLabel.removeAllActions()
+        scheduledCelebrations.removeAll()
+        cooldownRestartDeadline = nil
+        resetSessionProgress()
+        resetForNextThrow(showHint: true)
+    }
+
+    func pauseSession() -> PauseSnapshot {
+        removeAction(forKey: "autoRestart")
+        isPaused = true
+        return pauseSnapshot()
+    }
+
+    func resumeSession() {
+        isPaused = false
+        lastUpdateTime = 0
+    }
+
+    func pauseSnapshot() -> PauseSnapshot {
+        let challenge = SaveManager.shared.currentDailyChallenge()
+        let challengeBest = SaveManager.shared.dailyChallengeBest(for: challenge)
+        let titleProgress = SaveManager.shared.distanceTitleProgress()
+        let nextGoalText: String
+        if let nextTitle = titleProgress.nextTitle {
+            nextGoalText = "距 \(nextTitle.title) 还差 \(titleProgress.remainingDistance)m"
+        } else {
+            nextGoalText = "称号已达最高段位"
+        }
+
+        return PauseSnapshot(
+            currentDistance: Int(metrics.currentDistance.rounded()),
+            sessionThrows: sessionThrowCount,
+            sessionBestDistance: sessionBestDistance,
+            sessionPerfectCount: sessionPerfectCount,
+            challengeTitle: challenge.title,
+            challengeBest: challengeBest,
+            challengeTarget: challenge.targetDistance,
+            nextGoalText: nextGoalText
+        )
     }
 
     private func setupScene() {
@@ -241,7 +321,7 @@ final class SealThrowScene: SKScene {
     }
 
     private func setupHUD() {
-        for label in [messageLabel, hintLabel, distanceLabel, bestLabel, flapLabel, biomeLabel, releaseLabel, backLabel] {
+        for label in [messageLabel, hintLabel, distanceLabel, bestLabel, flapLabel, sessionLabel, objectiveLabel, biomeLabel, releaseLabel, backLabel] {
             label.horizontalAlignmentMode = .left
             label.verticalAlignmentMode = .center
             hudNode.addChild(label)
@@ -263,6 +343,12 @@ final class SealThrowScene: SKScene {
         flapLabel.fontSize = 18
         flapLabel.fontColor = SKColor(red: 0.88, green: 0.96, blue: 1.0, alpha: 1.0)
 
+        sessionLabel.fontSize = 16
+        sessionLabel.fontColor = SKColor(red: 0.84, green: 0.92, blue: 1.0, alpha: 1.0)
+
+        objectiveLabel.fontSize = 15
+        objectiveLabel.fontColor = SKColor(red: 0.86, green: 0.92, blue: 1.0, alpha: 0.92)
+
         biomeLabel.fontSize = 18
         biomeLabel.fontColor = SKColor(red: 0.93, green: 0.98, blue: 1.0, alpha: 1.0)
         biomeLabel.horizontalAlignmentMode = .right
@@ -275,6 +361,40 @@ final class SealThrowScene: SKScene {
         backLabel.text = "返回"
         backLabel.fontColor = .white
         backLabel.fontColor = SKColor(red: 0.20, green: 0.28, blue: 0.36, alpha: 1.0)
+
+        recapCard.path = CGPath(
+            roundedRect: CGRect(x: -160, y: -52, width: 320, height: 104),
+            cornerWidth: 18,
+            cornerHeight: 18,
+            transform: nil
+        )
+        recapCard.fillColor = SKColor(red: 0.10, green: 0.18, blue: 0.26, alpha: 0.88)
+        recapCard.strokeColor = SKColor(red: 0.52, green: 0.76, blue: 0.96, alpha: 0.72)
+        recapCard.lineWidth = 2
+        recapCard.zPosition = 30
+        recapCard.alpha = 0
+        hudNode.addChild(recapCard)
+
+        recapTitleLabel.fontSize = 24
+        recapTitleLabel.fontColor = .white
+        recapTitleLabel.horizontalAlignmentMode = .center
+        recapTitleLabel.verticalAlignmentMode = .center
+        recapTitleLabel.position = CGPoint(x: 0, y: 22)
+        recapCard.addChild(recapTitleLabel)
+
+        recapDetailLabel.fontSize = 13
+        recapDetailLabel.fontColor = SKColor(red: 0.86, green: 0.94, blue: 1.0, alpha: 1.0)
+        recapDetailLabel.horizontalAlignmentMode = .center
+        recapDetailLabel.verticalAlignmentMode = .center
+        recapDetailLabel.position = CGPoint(x: 0, y: -2)
+        recapCard.addChild(recapDetailLabel)
+
+        recapFooterLabel.fontSize = 12
+        recapFooterLabel.fontColor = SKColor(red: 0.76, green: 0.88, blue: 0.96, alpha: 0.95)
+        recapFooterLabel.horizontalAlignmentMode = .center
+        recapFooterLabel.verticalAlignmentMode = .center
+        recapFooterLabel.position = CGPoint(x: 0, y: -24)
+        recapCard.addChild(recapFooterLabel)
     }
 
     private func layoutHUD() {
@@ -286,12 +406,15 @@ final class SealThrowScene: SKScene {
         distanceLabel.position = CGPoint(x: left, y: top - 8)
         bestLabel.position = CGPoint(x: left, y: top - 40)
         flapLabel.position = CGPoint(x: left, y: top - 68)
+        sessionLabel.position = CGPoint(x: left, y: top - 96)
+        backLabel.position = CGPoint(x: left, y: top - 124)
+        objectiveLabel.position = CGPoint(x: left, y: bottom + 54)
         hintLabel.position = CGPoint(x: left, y: bottom + 26)
         messageLabel.position = CGPoint(x: 0, y: top - 38)
         messageLabel.horizontalAlignmentMode = .center
         biomeLabel.position = CGPoint(x: right, y: top - 16)
         releaseLabel.position = CGPoint(x: right, y: top - 46)
-        backLabel.position = CGPoint(x: left, y: top - 96)
+        recapCard.position = CGPoint(x: 0, y: bottom + 112)
     }
 
     private func setupSpeedLines() {
@@ -324,6 +447,8 @@ final class SealThrowScene: SKScene {
         removeAction(forKey: "autoRestart")
         phase = .ready
         dailyChallenge = SaveManager.shared.currentDailyChallenge()
+        scheduledCelebrations.removeAll()
+        cooldownRestartDeadline = nil
         holdDuration = 0
         flightState = nil
         slowMotionTimer = 0
@@ -359,6 +484,9 @@ final class SealThrowScene: SKScene {
         updateArmPath(to: penguinNode.position)
         updateSpeedLines(forwardSpeed: 0, dt: 0)
         updateFeatureNodes(aroundX: cameraNode.position.x)
+        hideRecapCard()
+        updateSessionLabel()
+        updateObjectiveLabel()
         if showHint {
             showFloatingMessage("今日挑战：\(dailyChallenge.title) · \(dailyChallenge.targetDistance)m", color: profile.accentColor, duration: 0.8)
         }
@@ -411,6 +539,7 @@ final class SealThrowScene: SKScene {
     }
 
     private func updateIdlePose(currentTime: TimeInterval) {
+        syncDailyChallengeIfNeeded()
         let idleAngle = ThrowMechanics.restAngle + sin(CGFloat(currentTime) * 1.8) * 0.08
         penguinNode.position = orbitPosition(for: idleAngle)
         penguinNode.zRotation = idleAngle + .pi / 2
@@ -512,6 +641,14 @@ final class SealThrowScene: SKScene {
             airTime: metrics.airTime,
             challenge: dailyChallenge
         )
+        sessionThrowCount += 1
+        sessionBestDistance = max(sessionBestDistance, roundedDistance)
+        if metrics.releaseLabel == ReleaseJudgement.perfect.rawValue {
+            sessionPerfectCount += 1
+        }
+        updateSessionLabel()
+        updateObjectiveLabel()
+        showRunRecap(distance: roundedDistance, didBreakRecord: didBreakRecord, outcome: outcome)
 
         if didBreakRecord {
             ParticleEffects.shared.playStarBurst(at: penguinNode.position, in: self)
@@ -567,15 +704,7 @@ final class SealThrowScene: SKScene {
             ParticleEffects.shared.playStarBurst(at: penguinNode.position, in: self)
         }
 
-        run(
-            SKAction.sequence([
-                SKAction.wait(forDuration: 1.0 + extraDelay),
-                SKAction.run { [weak self] in
-                    self?.resetForNextThrow(showHint: false)
-                }
-            ]),
-            withKey: "autoRestart"
-        )
+        scheduleAutoRestart(after: max(minimumRunSummaryDuration, 1.0 + extraDelay))
     }
 
     private func updateHUD(for profile: EnvironmentProfile, flapsRemaining: Int) {
@@ -835,6 +964,75 @@ final class SealThrowScene: SKScene {
         )
     }
 
+    private func resetSessionProgress() {
+        sessionThrowCount = 0
+        sessionBestDistance = 0
+        sessionPerfectCount = 0
+    }
+
+    private func updateSessionLabel() {
+        if sessionThrowCount == 0 {
+            sessionLabel.text = "会话首投待发射"
+            return
+        }
+        sessionLabel.text = "会话 \(sessionThrowCount) 投 · 完美 \(sessionPerfectCount) 次 · 最佳 \(sessionBestDistance)m"
+    }
+
+    private func updateObjectiveLabel() {
+        let challengeBest = SaveManager.shared.dailyChallengeBest(for: dailyChallenge)
+        let activity = SaveManager.shared.dailyChallengeActivitySummary()
+        objectiveLabel.text = "\(dailyChallenge.title) · 今日 \(challengeBest)/\(dailyChallenge.targetDistance)m · 连续 \(activity.streakText) 天"
+    }
+
+    private func syncDailyChallengeIfNeeded() {
+        let currentChallenge = SaveManager.shared.currentDailyChallenge()
+        guard currentChallenge.key != dailyChallenge.key else { return }
+        dailyChallenge = currentChallenge
+        updateObjectiveLabel()
+    }
+
+    private func showRunRecap(distance: Int, didBreakRecord: Bool, outcome: DistanceRunOutcome) {
+        let challengeBest = SaveManager.shared.dailyChallengeBest(for: outcome.challenge)
+        let titleProgress = SaveManager.shared.distanceTitleProgress()
+        let titleText: String
+        if let nextTitle = titleProgress.nextTitle {
+            titleText = "距 \(nextTitle.title) 还差 \(titleProgress.remainingDistance)m"
+        } else {
+            titleText = "称号已满级"
+        }
+
+        recapTitleLabel.text = didBreakRecord ? "新纪录 \(distance)m · \(metrics.releaseLabel)" : "本次 \(distance)m · \(metrics.releaseLabel)"
+        let chainText = metrics.interactionCount > 0 ? "连锁 \(metrics.interactionCount)" : "无连锁"
+        let airTimeText = String(format: "%.1fs", metrics.airTime)
+        recapDetailLabel.text = "\(metrics.highestBiomeName) · \(chainText) · 滞空 \(airTimeText)"
+        let challengeText: String
+        if outcome.didCompleteDailyChallenge {
+            challengeText = "挑战完成 \(outcome.challenge.targetDistance)m"
+        } else {
+            challengeText = "\(outcome.challenge.title) · 今日 \(challengeBest)/\(outcome.challenge.targetDistance)m"
+        }
+        recapFooterLabel.text = "\(challengeText) · \(titleText)"
+        recapCard.removeAllActions()
+        recapCard.setScale(0.94)
+        recapCard.alpha = 1.0
+        recapCard.run(
+            SKAction.sequence([
+                SKAction.scale(to: 1.0, duration: 0.12),
+                SKAction.wait(forDuration: 1.8),
+                SKAction.fadeOut(withDuration: 0.22)
+            ])
+        )
+    }
+
+    private func hideRecapCard() {
+        recapCard.removeAllActions()
+        recapCard.alpha = 0
+    }
+
+    private func scheduleAutoRestart(after delay: TimeInterval) {
+        cooldownRestartDeadline = timelineTime + delay
+    }
+
     private func showFloatingMessage(_ text: String, color: SKColor, duration: TimeInterval = 0.65) {
         messageLabel.removeAllActions()
         messageLabel.text = text
@@ -855,21 +1053,31 @@ final class SealThrowScene: SKScene {
     }
 
     private func scheduleCelebrationMessages(_ messages: [CelebrationMessage]) -> TimeInterval {
+        scheduledCelebrations.removeAll()
         guard !messages.isEmpty else { return 0 }
 
         for (index, item) in messages.enumerated() {
             let delay = 0.52 + Double(index) * 0.64
-            run(
-                SKAction.sequence([
-                    SKAction.wait(forDuration: delay),
-                    SKAction.run { [weak self] in
-                        self?.showFloatingMessage(item.text, color: item.color, duration: 0.55)
-                    }
-                ])
+            scheduledCelebrations.append(
+                ScheduledCelebration(
+                    fireTime: timelineTime + delay,
+                    message: item
+                )
             )
         }
 
         return 0.52 + Double(messages.count) * 0.64
+    }
+
+    private func processCooldownEvents() {
+        while let nextCelebration = scheduledCelebrations.first, nextCelebration.fireTime <= timelineTime {
+            scheduledCelebrations.removeFirst()
+            showFloatingMessage(nextCelebration.message.text, color: nextCelebration.message.color, duration: 0.55)
+        }
+
+        if let cooldownRestartDeadline, timelineTime >= cooldownRestartDeadline {
+            resetForNextThrow(showHint: false)
+        }
     }
 
     private func createPenguinNode() -> SKNode {

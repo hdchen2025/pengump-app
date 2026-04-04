@@ -200,7 +200,7 @@ class MenuViewController: UIViewController {
         今日挑战：\(challenge.title)
         \(challengeText)
         \(achievementText)
-        自动结算后立刻下一投
+        局内支持暂停 / 重开 / 自动续投
         \(titleText)
         """
     }
