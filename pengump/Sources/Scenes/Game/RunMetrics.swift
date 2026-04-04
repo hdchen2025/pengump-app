@@ -4,12 +4,80 @@ import Foundation
 enum DistanceMilestones {
     static let all: [Int] = [100, 300, 800, 1500, 3000]
 
-    static func next(after distance: Int) -> Int? {
-        all.first(where: { $0 > distance })
-    }
-
     static func crossed(previousBest: Int, currentDistance: Int) -> Int? {
         all.last(where: { $0 > previousBest && $0 <= currentDistance })
+    }
+}
+
+enum DistanceTitle: CaseIterable {
+    case rookie
+    case striker
+    case glider
+    case aurora
+    case crown
+    case legend
+
+    var threshold: Int {
+        switch self {
+        case .rookie:
+            return 0
+        case .striker:
+            return 100
+        case .glider:
+            return 300
+        case .aurora:
+            return 800
+        case .crown:
+            return 1500
+        case .legend:
+            return 3000
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .rookie:
+            return "雪地见习生"
+        case .striker:
+            return "冰原投手"
+        case .glider:
+            return "裂谷滑翔者"
+        case .aurora:
+            return "极光追风者"
+        case .crown:
+            return "冰冠弹射王"
+        case .legend:
+            return "北境传说"
+        }
+    }
+
+    static func current(for distance: Int) -> DistanceTitle {
+        allCases.last(where: { distance >= $0.threshold }) ?? .rookie
+    }
+
+    static func next(after distance: Int) -> DistanceTitle? {
+        allCases.first(where: { distance < $0.threshold })
+    }
+
+    static func crossed(previousBest: Int, currentDistance: Int) -> DistanceTitle? {
+        allCases.last(where: { $0.threshold > previousBest && $0.threshold <= currentDistance })
+    }
+}
+
+struct DistanceTitleProgress {
+    let currentTitle: DistanceTitle
+    let nextTitle: DistanceTitle?
+    let remainingDistance: Int
+
+    static func forDistance(_ distance: Int) -> DistanceTitleProgress {
+        let currentTitle = DistanceTitle.current(for: distance)
+        let nextTitle = DistanceTitle.next(after: distance)
+        let remainingDistance = max(0, (nextTitle?.threshold ?? distance) - distance)
+        return DistanceTitleProgress(
+            currentTitle: currentTitle,
+            nextTitle: nextTitle,
+            remainingDistance: remainingDistance
+        )
     }
 }
 

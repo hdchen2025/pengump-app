@@ -533,6 +533,15 @@ final class SealThrowScene: SKScene {
             )
         }
 
+        if let unlockedTitle = outcome.newlyUnlockedTitle {
+            extraMessages.append(
+                CelebrationMessage(
+                    text: "新称号：\(unlockedTitle.title)",
+                    color: SKColor(red: 1.0, green: 0.86, blue: 0.42, alpha: 1.0)
+                )
+            )
+        }
+
         for achievement in outcome.newlyUnlockedAchievements {
             extraMessages.append(
                 CelebrationMessage(

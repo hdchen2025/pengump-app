@@ -65,6 +65,7 @@ struct DistanceRunOutcome {
     let didSetDailyChallengeRecord: Bool
     let didCompleteDailyChallenge: Bool
     let newlyUnlockedAchievements: [AchievementID]
+    let newlyUnlockedTitle: DistanceTitle?
 }
 
 enum DailyChallengeModifier: String, Codable, CaseIterable {
@@ -194,6 +195,12 @@ class SaveManager {
     }
     var unlockedAchievementCount: Int {
         unlockedAchievements.count
+    }
+    var currentDistanceTitle: DistanceTitle {
+        DistanceTitle.current(for: bestDistance)
+    }
+    var nextDistanceTitle: DistanceTitle? {
+        DistanceTitle.next(after: bestDistance)
     }
 
     // 兼容旧经济字段（免费版主流程不依赖）
@@ -459,6 +466,14 @@ class SaveManager {
         DailyChallenge.today(date: referenceDate)
     }
 
+    func distanceTitle(after distance: Int) -> DistanceTitle {
+        DistanceTitle.current(for: max(0, distance))
+    }
+
+    func distanceTitleProgress(for distance: Int? = nil) -> DistanceTitleProgress {
+        DistanceTitleProgress.forDistance(distance ?? bestDistance)
+    }
+
     @discardableResult
     func recordDistanceRun(
         distance: Int,
@@ -469,6 +484,7 @@ class SaveManager {
         challenge: DailyChallenge? = nil
     ) -> DistanceRunOutcome {
         let challenge = challenge ?? currentDailyChallenge()
+        let previousBestDistance = bestDistance
         let record = DistanceRecord(
             distance: max(0, distance),
             date: Date(),
@@ -497,13 +513,15 @@ class SaveManager {
         }
         let didCompleteDailyChallenge = previousChallengeBest < challenge.targetDistance
             && max(previousChallengeBest, record.distance) >= challenge.targetDistance
+        let newlyUnlockedTitle = DistanceTitle.crossed(previousBest: previousBestDistance, currentDistance: bestDistance)
         let newlyUnlockedAchievements = unlockAchievementsIfNeeded()
         save()
         return DistanceRunOutcome(
             challenge: challenge,
             didSetDailyChallengeRecord: didSetDailyChallengeRecord,
             didCompleteDailyChallenge: didCompleteDailyChallenge,
-            newlyUnlockedAchievements: newlyUnlockedAchievements
+            newlyUnlockedAchievements: newlyUnlockedAchievements,
+            newlyUnlockedTitle: newlyUnlockedTitle
         )
     }
 

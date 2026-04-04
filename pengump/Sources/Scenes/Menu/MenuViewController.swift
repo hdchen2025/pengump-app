@@ -173,10 +173,10 @@ class MenuViewController: UIViewController {
         let bestDistance = saveManager.bestDistance
         let totalThrows = saveManager.totalThrows
         let latestRun = saveManager.latestDistanceRecord
-        let milestoneText = milestoneSummary(for: bestDistance)
         let challenge = saveManager.currentDailyChallenge()
         let challengeText = dailyChallengeSummary(challenge: challenge, saveManager: saveManager)
         let achievementText = achievementSummary(saveManager: saveManager)
+        let titleText = distanceTitleSummary(saveManager: saveManager)
 
         startButton.setTitle(totalThrows > 0 ? "再来远投" : "开始远投", for: .normal)
 
@@ -188,7 +188,7 @@ class MenuViewController: UIViewController {
             今日挑战：\(challenge.title)
             \(challengeText)
             \(achievementText)
-            \(milestoneText)
+            \(titleText)
             """
             return
         }
@@ -199,7 +199,7 @@ class MenuViewController: UIViewController {
         \(challengeText)
         \(achievementText)
         自动结算后立刻下一投
-        \(milestoneText)
+        \(titleText)
         """
     }
 
@@ -223,13 +223,6 @@ class MenuViewController: UIViewController {
         }
     }
 
-    private func milestoneSummary(for bestDistance: Int) -> String {
-        if let next = DistanceMilestones.next(after: bestDistance) {
-            return "下一里程碑 \(next)m · 还差 \(max(0, next - bestDistance))m"
-        }
-        return "已冲破所有基础里程碑"
-    }
-
     private func dailyChallengeSummary(challenge: DailyChallenge, saveManager: SaveManager) -> String {
         let todayBest = saveManager.dailyChallengeBest(for: challenge)
         if todayBest > 0 {
@@ -243,5 +236,13 @@ class MenuViewController: UIViewController {
             return "下一成就：\(progress.title) \(progress.progressText)"
         }
         return "成就已全部解锁"
+    }
+
+    private func distanceTitleSummary(saveManager: SaveManager) -> String {
+        let progress = saveManager.distanceTitleProgress()
+        if let nextTitle = progress.nextTitle {
+            return "称号 \(progress.currentTitle.title) · 距 \(nextTitle.title) 还差 \(progress.remainingDistance)m"
+        }
+        return "称号 \(progress.currentTitle.title) · 已达最高段位"
     }
 }

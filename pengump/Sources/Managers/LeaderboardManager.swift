@@ -143,17 +143,18 @@ class LeaderboardManager {
 
     private func statsText(from saveManager: SaveManager) -> String {
         let bestBiome = biomeTitle(for: saveManager.highestBiomeReached)
-        let milestoneText: String
-        if let next = DistanceMilestones.next(after: saveManager.bestDistance) {
-            milestoneText = "下一里程碑 \(next)m"
+        let titleProgress = saveManager.distanceTitleProgress()
+        let titleText: String
+        if let nextTitle = titleProgress.nextTitle {
+            titleText = "称号 \(titleProgress.currentTitle.title) · 距 \(nextTitle.title) 还差 \(titleProgress.remainingDistance)m"
         } else {
-            milestoneText = "已冲破基础里程碑"
+            titleText = "称号 \(titleProgress.currentTitle.title) · 已达最高段位"
         }
         let challenge = saveManager.currentDailyChallenge()
         let challengeBest = saveManager.dailyChallengeBest(for: challenge)
         let challengeText = challengeBest > 0 ? "目标 \(challenge.targetDistance)m · 今日最佳 \(challengeBest)m" : "目标 \(challenge.targetDistance)m · 今日最佳待刷新"
         let unlockedText = "已解锁成就 \(saveManager.unlockedAchievementCount)/\(AchievementID.allCases.count)"
-        return "累计 \(saveManager.totalThrows) 次 · 完美出手 \(saveManager.perfectReleaseCount) 次\n最远冲到 \(bestBiome) · \(milestoneText)\n今日挑战：\(challenge.title) · \(challengeText)\n\(unlockedText)"
+        return "累计 \(saveManager.totalThrows) 次 · 完美出手 \(saveManager.perfectReleaseCount) 次 · \(bestBiome)\n\(titleText)\n今日挑战：\(challenge.title) · \(challengeText)\n\(unlockedText)"
     }
 
     private func biomeTitle(for highestBiome: Int) -> String {
