@@ -1330,16 +1330,20 @@ class GameScene: SKScene {
     }
 
     private func distanceFromPoint(_ point: CGPoint, toSegmentFrom start: CGPoint, end: CGPoint) -> CGFloat {
+        segmentProjection(of: point, ontoSegmentFrom: start, end: end).distance
+    }
+
+    private func segmentProjection(of point: CGPoint, ontoSegmentFrom start: CGPoint, end: CGPoint) -> (distance: CGFloat, progress: CGFloat) {
         let dx = end.x - start.x
         let dy = end.y - start.y
         let lengthSquared = dx * dx + dy * dy
         guard lengthSquared > 0 else {
-            return hypot(point.x - start.x, point.y - start.y)
+            return (hypot(point.x - start.x, point.y - start.y), 0)
         }
 
         let t = max(0, min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared))
         let closest = CGPoint(x: start.x + dx * t, y: start.y + dy * t)
-        return hypot(point.x - closest.x, point.y - closest.y)
+        return (hypot(point.x - closest.x, point.y - closest.y), t)
     }
 
     private func checkPenguinCollisions() {
@@ -1349,19 +1353,18 @@ class GameScene: SKScene {
         let penguinSpeed = sqrt(pb.velocity.dx * pb.velocity.dx + pb.velocity.dy * pb.velocity.dy)
         let segmentStart = lastPenguinPosition ?? penguin.position
         let segmentEnd = penguin.position
-        var closestBlock: IceBlockNode?
-        var closestDistance: CGFloat = .greatestFiniteMagnitude
+        var firstHit: (block: IceBlockNode, progress: CGFloat)?
 
         for block in iceBlocks {
             guard !block.isBreaking else { continue }
-            let distance = distanceFromPoint(block.position, toSegmentFrom: segmentStart, end: segmentEnd)
-            if distance < 42, distance < closestDistance {
-                closestDistance = distance
-                closestBlock = block
+            let projection = segmentProjection(of: block.position, ontoSegmentFrom: segmentStart, end: segmentEnd)
+            if projection.distance < 42,
+               firstHit == nil || projection.progress < firstHit!.progress {
+                firstHit = (block, projection.progress)
             }
         }
 
-        if let block = closestBlock {
+        if let block = firstHit?.block {
             let damage = max(1, Int(penguinSpeed / 3))
             let destroyed = block.takeDamage(damage)
 
