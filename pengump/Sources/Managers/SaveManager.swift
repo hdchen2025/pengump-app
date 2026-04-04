@@ -239,6 +239,7 @@ class SaveManager {
         static let unlockedAchievements = "unlocked_achievements"
         static let bestInteractionCount = "best_interaction_count"
         static let longestAirTime = "longest_air_time"
+        static let reducedCameraMotion = "reduced_camera_motion"
     }
 
     // MARK: - 数据属性
@@ -268,6 +269,10 @@ class SaveManager {
     }
     var nextDistanceTitle: DistanceTitle? {
         DistanceTitle.next(after: bestDistance)
+    }
+    var isReducedCameraMotionEnabled: Bool {
+        get { defaults.object(forKey: Keys.reducedCameraMotion) as? Bool ?? false }
+        set { defaults.set(newValue, forKey: Keys.reducedCameraMotion) }
     }
 
     // 兼容旧经济字段（免费版主流程不依赖）

@@ -796,6 +796,7 @@ final class SealThrowScene: SKScene {
     }
 
     private func pulseCamera(scale: CGFloat) {
+        guard !SaveManager.shared.isReducedCameraMotionEnabled else { return }
         cameraNode.removeAction(forKey: "cameraPulse")
         cameraNode.run(
             SKAction.sequence([

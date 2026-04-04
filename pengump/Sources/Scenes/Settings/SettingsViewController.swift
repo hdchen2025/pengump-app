@@ -5,6 +5,7 @@ import SnapKit
 
 enum SettingsSection: Int, CaseIterable {
     case audio
+    case gameplay
     case language
     case about
 
@@ -12,6 +13,7 @@ enum SettingsSection: Int, CaseIterable {
         let english = UserDefaults.standard.string(forKey: "game_language") == "English"
         switch self {
         case .audio: return english ? "Audio" : "声音设置"
+        case .gameplay: return english ? "Gameplay" : "玩法体验"
         case .language: return english ? "Language" : "语言"
         case .about: return english ? "About" : "关于"
         }
@@ -61,6 +63,7 @@ class SettingsViewController: UIViewController {
         case musicVolume
         case sfxSwitch
         case sfxVolume
+        case reducedCameraMotion
         case language(String)
         case about(String)
         case version(String)
@@ -120,12 +123,15 @@ class SettingsViewController: UIViewController {
                 .sfxSwitch,
                 .sfxVolume
             ]),
+            (.gameplay, [
+                .reducedCameraMotion
+            ]),
             (.language, [
                 .language(currentLang)
             ]),
             (.about, [
                 .version("v1.0.0"),
-                .about(isEnglish ? "Hit Penguin - Pixel Slingshot Game" : "打企鹅 - 像素弹弓休闲游戏"),
+                .about(isEnglish ? "Penguin Toss Distance Challenge" : "企鹅飞多远 - 海豹远投距离挑战"),
                 .rateApp,
                 .privacy
             ])
@@ -248,6 +254,14 @@ extension SettingsViewController: UITableViewDataSource {
             let title = isEnglish ? "SFX Volume" : "音效音量"
             cell.configure(title: title, value: audioManager.sfxVolume, icon: "🔊") { value in
                 audioManager.sfxVolume = value
+            }
+            return cell
+
+        case .reducedCameraMotion:
+            let cell = tableView.dequeueReusableCell(withIdentifier: "SwitchCell", for: indexPath) as! SwitchTableViewCell
+            let title = isEnglish ? "Reduce Camera Motion" : "减弱镜头动效"
+            cell.configure(title: title, isOn: SaveManager.shared.isReducedCameraMotionEnabled) { isOn in
+                SaveManager.shared.isReducedCameraMotionEnabled = isOn
             }
             return cell
 
