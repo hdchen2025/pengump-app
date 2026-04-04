@@ -6,11 +6,11 @@ struct GamePhysics {
     static let maxPullDistance: CGFloat = 138.0
     static let minPullDistance: CGFloat = 18.0
     static let launchSpeedMultiplier: CGFloat = 0.72
-    static let minimumLaunchSpeed: CGFloat = 52.0
-    static let maxLaunchSpeed: CGFloat = 128.0
-    static let minimumSwingAngle: CGFloat = .pi / 10
-    static let maximumSwingAngle: CGFloat = .pi * 0.46
-    static let minimumSwingPowerToLaunch: CGFloat = 0.08
+    static let minimumLaunchSpeed: CGFloat = 58.0
+    static let maxLaunchSpeed: CGFloat = 144.0
+    static let minimumLaunchAngle: CGFloat = .pi / 12
+    static let maximumLaunchAngle: CGFloat = .pi * 0.42
+    static let minimumLaunchPowerToFire: CGFloat = 0.10
     static let gravity: CGFloat = 0.22
     static let airResistance: CGFloat = 0.992
     static let rubberBandElasticity: CGFloat = 0.4
@@ -35,7 +35,7 @@ struct GameScore {
 enum PenguinFlightState {
     case ready
     case aiming
-    case swinging
+    case firing
     case flying
     case stopped
 }
@@ -246,30 +246,26 @@ class GameScene: SKScene {
     private var trajectoryLine: SKShapeNode!
     private var activePenguin: SKSpriteNode?
     private var penguinQueue: [SKSpriteNode] = []
-    private var slingshotAnchorLeft: CGPoint = .zero
-    private var slingshotAnchorRight: CGPoint = .zero
     private var trailEmitter: SKEmitterNode?
     private var groundedSince: TimeInterval?
     private var battlefieldSize: CGSize = .zero
     private var gameCamera: SKCameraNode!
     private let hudNode = SKNode()
     private var introPreviewRunning: Bool = false
-    private var swingPivotNode: SKNode!
-    private var batNode: SKShapeNode!
-    private var frontArmNode: SKShapeNode!
-    private var backArmNode: SKShapeNode!
-    private var swingTrailNode: SKShapeNode!
-    private var aimAngle: CGFloat = GamePhysics.minimumSwingAngle
+    private var cannonPivotNode: SKNode!
+    private var cannonBarrelNode: SKShapeNode!
+    private var cannonBlastNode: SKShapeNode!
+    private var aimAngle: CGFloat = GamePhysics.minimumLaunchAngle
     private var aimPower: CGFloat = 0
-    private var batterBasePosition: CGPoint = .zero
-    private var swingPivotBasePosition: CGPoint = .zero
-    private var hasChargedSwing: Bool = false
+    private var cannonBasePosition: CGPoint = .zero
+    private var hasChargedShot: Bool = false
 
     // MARK: - UI节点
 
     private var scoreLabel: SKLabelNode!
     private var levelLabel: SKLabelNode!
     private var penguinCountLabel: SKLabelNode!
+    private var angleValueLabel: SKLabelNode!
     private var powerMeterLabel: SKLabelNode!
     private var powerMeterFillNode: SKSpriteNode!
     private var hintLabel: SKLabelNode!
@@ -447,122 +443,83 @@ class GameScene: SKScene {
 
         slingshotBase = SKNode()
         slingshotBase.position = CGPoint(x: baseX, y: baseY)
-        batterBasePosition = slingshotBase.position
+        cannonBasePosition = slingshotBase.position
         addChild(slingshotBase)
 
-        let platform = SKShapeNode(rectOf: CGSize(width: 150, height: 18), cornerRadius: 9)
-        platform.fillColor = UIColor(red: 0.81, green: 0.71, blue: 0.56, alpha: 1.0)
-        platform.strokeColor = UIColor(red: 0.54, green: 0.42, blue: 0.25, alpha: 1.0)
-        platform.lineWidth = 2
-        platform.position = CGPoint(x: 34, y: 10)
-        slingshotBase.addChild(platform)
+        let carriage = SKShapeNode(rectOf: CGSize(width: 150, height: 22), cornerRadius: 11)
+        carriage.fillColor = UIColor(red: 0.48, green: 0.34, blue: 0.2, alpha: 1.0)
+        carriage.strokeColor = UIColor(red: 0.28, green: 0.18, blue: 0.08, alpha: 1.0)
+        carriage.lineWidth = 2
+        carriage.position = CGPoint(x: 38, y: 18)
+        slingshotBase.addChild(carriage)
 
-        let body = SKShapeNode(ellipseOf: CGSize(width: 34, height: 58))
-        body.fillColor = UIColor(red: 0.96, green: 0.42, blue: 0.36, alpha: 1.0)
-        body.strokeColor = UIColor(red: 0.65, green: 0.18, blue: 0.14, alpha: 1.0)
-        body.lineWidth = 2
-        body.position = CGPoint(x: 0, y: 44)
-        slingshotBase.addChild(body)
+        let brace = SKShapeNode(rectOf: CGSize(width: 54, height: 16), cornerRadius: 8)
+        brace.fillColor = UIColor(red: 0.56, green: 0.42, blue: 0.28, alpha: 1.0)
+        brace.strokeColor = UIColor(red: 0.3, green: 0.21, blue: 0.12, alpha: 1.0)
+        brace.lineWidth = 2
+        brace.position = CGPoint(x: 26, y: 42)
+        slingshotBase.addChild(brace)
 
-        let leftLeg = SKShapeNode(rectOf: CGSize(width: 10, height: 34), cornerRadius: 5)
-        leftLeg.fillColor = UIColor(red: 0.19, green: 0.22, blue: 0.3, alpha: 1.0)
-        leftLeg.strokeColor = .clear
-        leftLeg.position = CGPoint(x: -8, y: 12)
-        slingshotBase.addChild(leftLeg)
+        for wheelX in [2.0, 74.0] {
+            let wheel = SKShapeNode(circleOfRadius: 16)
+            wheel.fillColor = UIColor(red: 0.18, green: 0.2, blue: 0.24, alpha: 1.0)
+            wheel.strokeColor = UIColor(red: 0.42, green: 0.45, blue: 0.5, alpha: 1.0)
+            wheel.lineWidth = 3
+            wheel.position = CGPoint(x: wheelX, y: 2)
+            slingshotBase.addChild(wheel)
 
-        let rightLeg = SKShapeNode(rectOf: CGSize(width: 10, height: 34), cornerRadius: 5)
-        rightLeg.fillColor = UIColor(red: 0.19, green: 0.22, blue: 0.3, alpha: 1.0)
-        rightLeg.strokeColor = .clear
-        rightLeg.position = CGPoint(x: 8, y: 12)
-        slingshotBase.addChild(rightLeg)
-
-        let head = SKShapeNode(circleOfRadius: 15)
-        head.fillColor = UIColor(red: 1.0, green: 0.89, blue: 0.73, alpha: 1.0)
-        head.strokeColor = UIColor(red: 0.72, green: 0.58, blue: 0.42, alpha: 1.0)
-        head.lineWidth = 2
-        head.position = CGPoint(x: 0, y: 84)
-        slingshotBase.addChild(head)
-
-        let visor = SKShapeNode(rectOf: CGSize(width: 18, height: 6), cornerRadius: 3)
-        visor.fillColor = UIColor(red: 0.16, green: 0.2, blue: 0.28, alpha: 1.0)
-        visor.strokeColor = .clear
-        visor.position = CGPoint(x: 6, y: 1)
-        head.addChild(visor)
-
-        let tee = SKShapeNode(rectOf: CGSize(width: 14, height: 26), cornerRadius: 4)
-        tee.fillColor = UIColor(red: 0.38, green: 0.46, blue: 0.54, alpha: 1.0)
-        tee.strokeColor = UIColor(red: 0.22, green: 0.28, blue: 0.34, alpha: 1.0)
-        tee.lineWidth = 2
-        tee.position = CGPoint(x: 66, y: 25)
-        slingshotBase.addChild(tee)
-
-        let teeTop = SKShapeNode(rectOf: CGSize(width: 26, height: 8), cornerRadius: 4)
-        teeTop.fillColor = UIColor(red: 0.63, green: 0.74, blue: 0.82, alpha: 1.0)
-        teeTop.strokeColor = .clear
-        teeTop.position = CGPoint(x: 0, y: 9)
-        tee.addChild(teeTop)
-
-        swingPivotNode = SKNode()
-        swingPivotNode.position = CGPoint(x: baseX + 12, y: baseY + 60)
-        swingPivotBasePosition = swingPivotNode.position
-        addChild(swingPivotNode)
-
-        backArmNode = SKShapeNode(rectOf: CGSize(width: 34, height: 10), cornerRadius: 5)
-        backArmNode.fillColor = UIColor(red: 0.95, green: 0.8, blue: 0.67, alpha: 1.0)
-        backArmNode.strokeColor = UIColor(red: 0.7, green: 0.54, blue: 0.39, alpha: 1.0)
-        backArmNode.lineWidth = 1.5
-        backArmNode.position = CGPoint(x: 12, y: 0)
-        backArmNode.zPosition = 1
-        swingPivotNode.addChild(backArmNode)
-
-        batNode = SKShapeNode(rectOf: CGSize(width: 64, height: 10), cornerRadius: 5)
-        batNode.fillColor = UIColor(red: 0.45, green: 0.27, blue: 0.13, alpha: 1.0)
-        batNode.strokeColor = UIColor(red: 0.25, green: 0.14, blue: 0.06, alpha: 1.0)
-        batNode.lineWidth = 2
-        batNode.position = CGPoint(x: 34, y: 0)
-        batNode.zPosition = 2
-        swingPivotNode.addChild(batNode)
-
-        frontArmNode = SKShapeNode(rectOf: CGSize(width: 42, height: 12), cornerRadius: 6)
-        frontArmNode.fillColor = UIColor(red: 0.98, green: 0.84, blue: 0.71, alpha: 1.0)
-        frontArmNode.strokeColor = UIColor(red: 0.71, green: 0.57, blue: 0.43, alpha: 1.0)
-        frontArmNode.lineWidth = 1.5
-        frontArmNode.position = CGPoint(x: 22, y: 0)
-        frontArmNode.zPosition = 3
-        swingPivotNode.addChild(frontArmNode)
-
-        let grip = SKShapeNode(rectOf: CGSize(width: 16, height: 12), cornerRadius: 4)
-        grip.fillColor = UIColor(red: 0.19, green: 0.12, blue: 0.08, alpha: 1.0)
-        grip.strokeColor = .clear
-        grip.position = CGPoint(x: -22, y: 0)
-        batNode.addChild(grip)
-
-        let maceHead = SKShapeNode(circleOfRadius: 13)
-        maceHead.fillColor = UIColor(red: 0.34, green: 0.39, blue: 0.47, alpha: 1.0)
-        maceHead.strokeColor = UIColor(red: 0.2, green: 0.24, blue: 0.3, alpha: 1.0)
-        maceHead.lineWidth = 2
-        maceHead.position = CGPoint(x: 28, y: 0)
-        batNode.addChild(maceHead)
-
-        for index in 0..<6 {
-            let spikePath = CGMutablePath()
-            spikePath.move(to: CGPoint(x: 0, y: 0))
-            spikePath.addLine(to: CGPoint(x: 10, y: 2))
-            spikePath.addLine(to: CGPoint(x: 0, y: 4))
-            spikePath.closeSubpath()
-
-            let spike = SKShapeNode(path: spikePath)
-            spike.fillColor = UIColor(red: 0.72, green: 0.77, blue: 0.84, alpha: 1.0)
-            spike.strokeColor = UIColor(red: 0.26, green: 0.31, blue: 0.37, alpha: 1.0)
-            spike.lineWidth = 1.2
-            let rotation = CGFloat(index) * (.pi / 3)
-            spike.zRotation = rotation
-            spike.position = CGPoint(
-                x: cos(rotation) * 11,
-                y: sin(rotation) * 11
-            )
-            maceHead.addChild(spike)
+            let hub = SKShapeNode(circleOfRadius: 5)
+            hub.fillColor = UIColor(red: 0.8, green: 0.74, blue: 0.64, alpha: 1.0)
+            hub.strokeColor = .clear
+            wheel.addChild(hub)
         }
+
+        let axle = SKShapeNode(rectOf: CGSize(width: 94, height: 10), cornerRadius: 5)
+        axle.fillColor = UIColor(red: 0.25, green: 0.28, blue: 0.33, alpha: 1.0)
+        axle.strokeColor = .clear
+        axle.position = CGPoint(x: 38, y: 20)
+        slingshotBase.addChild(axle)
+
+        cannonPivotNode = SKNode()
+        cannonPivotNode.position = CGPoint(x: baseX + 34, y: baseY + 64)
+        addChild(cannonPivotNode)
+
+        let barrelShadow = SKShapeNode(rectOf: CGSize(width: 88, height: 26), cornerRadius: 13)
+        barrelShadow.fillColor = UIColor(red: 0.12, green: 0.14, blue: 0.19, alpha: 0.38)
+        barrelShadow.strokeColor = .clear
+        barrelShadow.position = CGPoint(x: 46, y: -4)
+        barrelShadow.zPosition = 0
+        cannonPivotNode.addChild(barrelShadow)
+
+        cannonBarrelNode = SKShapeNode(rectOf: CGSize(width: 84, height: 24), cornerRadius: 12)
+        cannonBarrelNode.fillColor = UIColor(red: 0.3, green: 0.35, blue: 0.42, alpha: 1.0)
+        cannonBarrelNode.strokeColor = UIColor(red: 0.14, green: 0.17, blue: 0.22, alpha: 1.0)
+        cannonBarrelNode.lineWidth = 3
+        cannonBarrelNode.position = CGPoint(x: 42, y: 0)
+        cannonBarrelNode.zPosition = 2
+        cannonPivotNode.addChild(cannonBarrelNode)
+
+        let barrelInner = SKShapeNode(rectOf: CGSize(width: 70, height: 10), cornerRadius: 5)
+        barrelInner.fillColor = UIColor(red: 0.13, green: 0.15, blue: 0.19, alpha: 0.42)
+        barrelInner.strokeColor = .clear
+        barrelInner.position = CGPoint(x: 10, y: 0)
+        cannonBarrelNode.addChild(barrelInner)
+
+        let breech = SKShapeNode(circleOfRadius: 18)
+        breech.fillColor = UIColor(red: 0.24, green: 0.28, blue: 0.34, alpha: 1.0)
+        breech.strokeColor = UIColor(red: 0.1, green: 0.12, blue: 0.16, alpha: 1.0)
+        breech.lineWidth = 3
+        breech.position = CGPoint(x: 8, y: 0)
+        breech.zPosition = 1
+        cannonPivotNode.addChild(breech)
+
+        let muzzleRing = SKShapeNode(circleOfRadius: 12)
+        muzzleRing.fillColor = UIColor(red: 0.42, green: 0.46, blue: 0.53, alpha: 1.0)
+        muzzleRing.strokeColor = UIColor(red: 0.15, green: 0.17, blue: 0.22, alpha: 1.0)
+        muzzleRing.lineWidth = 3
+        muzzleRing.position = CGPoint(x: 84, y: 0)
+        muzzleRing.zPosition = 3
+        cannonPivotNode.addChild(muzzleRing)
 
         leftBandNode = SKShapeNode()
         leftBandNode.strokeColor = UIColor(red: 0.98, green: 0.62, blue: 0.25, alpha: 0.7)
@@ -578,91 +535,101 @@ class GameScene: SKScene {
         rightBandNode.zPosition = 6
         addChild(rightBandNode)
 
-        swingTrailNode = SKShapeNode()
-        swingTrailNode.strokeColor = UIColor(red: 1.0, green: 0.87, blue: 0.47, alpha: 0.0)
-        swingTrailNode.lineWidth = 8
-        swingTrailNode.lineCap = .round
-        swingTrailNode.glowWidth = 4
-        swingTrailNode.zPosition = 4
-        addChild(swingTrailNode)
+        cannonBlastNode = SKShapeNode()
+        cannonBlastNode.strokeColor = UIColor(red: 1.0, green: 0.9, blue: 0.58, alpha: 0.0)
+        cannonBlastNode.lineWidth = 10
+        cannonBlastNode.lineCap = .round
+        cannonBlastNode.glowWidth = 6
+        cannonBlastNode.zPosition = 4
+        addChild(cannonBlastNode)
 
-        slingshotAnchorLeft = swingPivotNode.position
-        slingshotAnchorRight = penguinReadyPosition()
-        aimAngle = .pi / 4.6
-        aimPower = 0.42
-        hasChargedSwing = true
-        updateSwingAimingVisuals(showTrajectory: true)
+        aimAngle = defaultAimAngle()
+        aimPower = defaultAimPower()
+        hasChargedShot = true
+        updateCannonAimingVisuals(showTrajectory: true)
     }
 
-    private func penguinReadyPosition() -> CGPoint {
-        CGPoint(x: slingshotBase.position.x + 66, y: slingshotBase.position.y + 38)
+    private func defaultAimAngle() -> CGFloat {
+        .pi / 4.8
     }
 
-    private func aimOrigin() -> CGPoint {
-        penguinNode?.position ?? penguinReadyPosition()
+    private func defaultAimPower() -> CGFloat {
+        0.58
     }
 
-    private func strikeOrigin() -> CGPoint {
-        swingPivotNode?.position ?? CGPoint(x: slingshotBase.position.x + 12, y: slingshotBase.position.y + 60)
+    private func cannonPivotPosition() -> CGPoint {
+        cannonPivotNode?.position ?? CGPoint(x: slingshotBase.position.x + 34, y: slingshotBase.position.y + 64)
     }
 
-    private func swingArcPath(from startAngle: CGFloat, to endAngle: CGFloat) -> CGPath {
-        let path = CGMutablePath()
-        let center = strikeOrigin()
-        path.addArc(
-            center: center,
-            radius: 80,
-            startAngle: startAngle,
-            endAngle: endAngle,
-            clockwise: false
+    private func penguinReadyPosition(for angle: CGFloat? = nil) -> CGPoint {
+        let actualAngle = angle ?? aimAngle
+        let pivot = cannonPivotPosition()
+        let loadDistance: CGFloat = 26
+        return CGPoint(
+            x: pivot.x + cos(actualAngle) * loadDistance,
+            y: pivot.y + sin(actualAngle) * loadDistance
         )
-        return path
     }
 
-    private func updateSwingAimingVisuals(showTrajectory: Bool) {
-        let launchOrigin = aimOrigin()
-        let swingOrigin = strikeOrigin()
-        let guideLength = 56 + aimPower * 120
-        let primaryTip = CGPoint(
-            x: launchOrigin.x + cos(aimAngle) * guideLength,
-            y: launchOrigin.y + sin(aimAngle) * guideLength
+    private func cannonMuzzlePosition(for angle: CGFloat? = nil) -> CGPoint {
+        let actualAngle = angle ?? aimAngle
+        let pivot = cannonPivotPosition()
+        let barrelLength: CGFloat = 72
+        return CGPoint(
+            x: pivot.x + cos(actualAngle) * barrelLength,
+            y: pivot.y + sin(actualAngle) * barrelLength
         )
-        let cockedBackAngle = aimAngle - (0.68 + aimPower * 0.34)
-        let backswingLength = 34 + aimPower * 56
-        let backswingTip = CGPoint(
-            x: swingOrigin.x + cos(cockedBackAngle) * backswingLength,
-            y: swingOrigin.y + sin(cockedBackAngle) * backswingLength
-        )
+    }
 
+    private func updateCannonAimingVisuals(showTrajectory: Bool) {
+        let pivot = cannonPivotPosition()
+        let readyPosition = penguinReadyPosition()
+        let muzzle = cannonMuzzlePosition()
+        let guideLength = 54 + aimPower * 124
+        let guideTip = CGPoint(
+            x: muzzle.x + cos(aimAngle) * guideLength,
+            y: muzzle.y + sin(aimAngle) * guideLength
+        )
+        let powderOrigin = CGPoint(
+            x: pivot.x - cos(aimAngle) * (16 + aimPower * 18),
+            y: pivot.y - sin(aimAngle) * (16 + aimPower * 18)
+        )
         let primaryPath = CGMutablePath()
-        primaryPath.move(to: swingOrigin)
-        primaryPath.addLine(to: backswingTip)
+        primaryPath.move(to: powderOrigin)
+        primaryPath.addLine(to: pivot)
         leftBandNode.path = primaryPath
-        leftBandNode.alpha = showTrajectory ? 0.92 : 0.28
+        leftBandNode.alpha = showTrajectory ? 0.72 : 0.2
 
         let secondaryPath = CGMutablePath()
-        secondaryPath.move(to: launchOrigin)
-        secondaryPath.addLine(to: primaryTip)
+        secondaryPath.move(to: muzzle)
+        secondaryPath.addLine(to: guideTip)
         rightBandNode.path = secondaryPath
-        rightBandNode.alpha = showTrajectory ? 1.0 : 0.26
+        rightBandNode.alpha = showTrajectory ? 0.95 : 0.22
 
-        swingPivotNode.zRotation = cockedBackAngle
-        frontArmNode.zRotation = aimPower * 0.04
-        backArmNode.zRotation = -aimPower * 0.03
+        cannonPivotNode.zRotation = aimAngle
         slingshotBase.position = CGPoint(
-            x: batterBasePosition.x - aimPower * 4,
-            y: batterBasePosition.y - aimPower * 3
+            x: cannonBasePosition.x - cos(aimAngle) * aimPower * 3.5,
+            y: cannonBasePosition.y - sin(aimAngle) * aimPower * 3.5
         )
-        slingshotBase.zRotation = -aimPower * 0.05
-        swingTrailNode.path = swingArcPath(
-            from: cockedBackAngle + 0.15,
-            to: aimAngle + 0.12
-        )
-        swingTrailNode.alpha = 1.0
-        swingTrailNode.strokeColor = UIColor(
+        slingshotBase.zRotation = -aimPower * 0.025
+
+        if let penguinNode {
+            penguinNode.position = readyPosition
+            penguinNode.zRotation = aimAngle + .pi / 2
+        }
+
+        let blastPath = CGMutablePath()
+        blastPath.move(to: muzzle)
+        blastPath.addLine(to: CGPoint(
+            x: muzzle.x + cos(aimAngle) * (20 + aimPower * 18),
+            y: muzzle.y + sin(aimAngle) * (20 + aimPower * 18)
+        ))
+        cannonBlastNode.path = blastPath
+        cannonBlastNode.alpha = 1.0
+        cannonBlastNode.strokeColor = UIColor(
             red: 1.0,
-            green: 0.87,
-            blue: 0.47,
+            green: 0.9,
+            blue: 0.58,
             alpha: showTrajectory ? 0.26 : 0.0
         )
         if trajectoryLine != nil {
@@ -780,15 +747,14 @@ class GameScene: SKScene {
     private func reloadSlingshot() {
         guard penguinNode == nil, activePenguin == nil, penguinsRemaining > 0 else { return }
 
+        aimAngle = defaultAimAngle()
+        aimPower = defaultAimPower()
+        hasChargedShot = true
         penguinNode = createPenguinNode()
-        let launchPos = penguinReadyPosition()
-        penguinNode.position = launchPos
+        penguinNode.position = penguinReadyPosition(for: aimAngle)
         penguinNode.zPosition = 20
         addChild(penguinNode)
-        aimAngle = .pi / 4.6
-        aimPower = 0.42
-        hasChargedSwing = true
-        updateSwingAimingVisuals(showTrajectory: true)
+        updateCannonAimingVisuals(showTrajectory: true)
         drawTrajectory()
         flightState = .ready
     }
@@ -843,12 +809,19 @@ class GameScene: SKScene {
         penguinCountLabel.position = CGPoint(x: rightEdge - 55, y: topEdge - 40)
         hudNode.addChild(penguinCountLabel)
 
-        powerMeterLabel = SKLabelNode(text: "蓄力 42%")
+        powerMeterLabel = SKLabelNode(text: "火药 58%")
         powerMeterLabel.fontSize = 14
         powerMeterLabel.fontColor = UIColor(red: 0.84, green: 0.42, blue: 0.16, alpha: 1.0)
         powerMeterLabel.fontName = "BoldSystem"
         powerMeterLabel.position = CGPoint(x: rightEdge - 90, y: topEdge - 68)
         hudNode.addChild(powerMeterLabel)
+
+        angleValueLabel = SKLabelNode(text: "角度 38°")
+        angleValueLabel.fontSize = 14
+        angleValueLabel.fontColor = UIColor(red: 0.24, green: 0.34, blue: 0.44, alpha: 1.0)
+        angleValueLabel.fontName = "BoldSystem"
+        angleValueLabel.position = CGPoint(x: rightEdge - 90, y: topEdge - 112)
+        hudNode.addChild(angleValueLabel)
 
         let powerMeterBg = SKShapeNode(rectOf: CGSize(width: 128, height: 16), cornerRadius: 8)
         powerMeterBg.fillColor = UIColor(white: 1.0, alpha: 0.18)
@@ -913,12 +886,13 @@ class GameScene: SKScene {
     }
 
     private func updatePowerMeter() {
-        guard powerMeterFillNode != nil, powerMeterLabel != nil else { return }
+        guard powerMeterFillNode != nil, powerMeterLabel != nil, angleValueLabel != nil else { return }
 
         let clampedPower = max(0, min(aimPower, 1))
         powerMeterFillNode.xScale = max(0.04, clampedPower)
         powerMeterFillNode.alpha = clampedPower > 0.01 ? 1.0 : 0.32
-        powerMeterLabel.text = "蓄力 \(Int((clampedPower * 100).rounded()))%"
+        powerMeterLabel.text = "火药 \(Int((clampedPower * 100).rounded()))%"
+        angleValueLabel.text = "角度 \(Int((aimAngle * 180 / .pi).rounded()))°"
     }
 
     private func isNodeInteractable(_ node: SKNode?, minimumAlpha: CGFloat = 0.95) -> Bool {
@@ -929,24 +903,16 @@ class GameScene: SKScene {
     private func canStartAiming(at location: CGPoint) -> Bool {
         guard let penguin = penguinNode else { return false }
 
-        let strikePos = strikeOrigin()
-        let strikeHitZone = CGRect(
-            x: strikePos.x - 56,
-            y: strikePos.y - 56,
-            width: 112,
-            height: 112
-        )
-        let launchPos = aimOrigin()
-        let launchHitZone = CGRect(
-            x: launchPos.x - 64,
-            y: launchPos.y - 64,
-            width: 128,
-            height: 128
-        )
+        let pivot = cannonPivotPosition()
+        let pivotHitZone = CGRect(x: pivot.x - 74, y: pivot.y - 74, width: 148, height: 148)
+        let muzzle = cannonMuzzlePosition()
+        let muzzleHitZone = CGRect(x: muzzle.x - 58, y: muzzle.y - 58, width: 116, height: 116)
 
         return hitFrame(for: penguin, expandBy: 28).contains(location)
-            || strikeHitZone.contains(location)
-            || launchHitZone.contains(location)
+            || hitFrame(for: slingshotBase, expandBy: 18).contains(location)
+            || hitFrame(for: cannonBarrelNode, expandBy: 18).contains(location)
+            || pivotHitZone.contains(location)
+            || muzzleHitZone.contains(location)
     }
 
     private func clearGroundedState() {
@@ -1006,8 +972,8 @@ class GameScene: SKScene {
         if flightState == .ready,
            canStartAiming(at: location) {
             flightState = .aiming
-            hasChargedSwing = false
-            updateSwingAimingVisuals(showTrajectory: false)
+            hasChargedShot = false
+            updateCannonAimingVisuals(showTrajectory: false)
         }
     }
 
@@ -1015,55 +981,54 @@ class GameScene: SKScene {
         guard flightState == .aiming, let touch = touches.first else { return }
 
         let location = touch.location(in: self)
-        updateSwingAim(at: location)
+        updateCannonAim(at: location)
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard flightState == .aiming else { return }
 
-        if !hasChargedSwing || aimPower < physics.minimumSwingPowerToLaunch {
-            aimPower = 0.42
-            aimAngle = .pi / 4.6
-            hasChargedSwing = true
-            updateSwingAimingVisuals(showTrajectory: true)
+        if !hasChargedShot || aimPower < physics.minimumLaunchPowerToFire {
+            aimPower = defaultAimPower()
+            aimAngle = defaultAimAngle()
+            hasChargedShot = true
+            updateCannonAimingVisuals(showTrajectory: true)
             drawTrajectory()
             flightState = .ready
             return
         }
 
-        startSwingLaunch()
+        startCannonLaunch()
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard flightState == .aiming else { return }
-        aimAngle = .pi / 4.6
-        aimPower = 0.42
-        hasChargedSwing = true
-        updateSwingAimingVisuals(showTrajectory: true)
+        aimAngle = defaultAimAngle()
+        aimPower = defaultAimPower()
+        hasChargedShot = true
+        updateCannonAimingVisuals(showTrajectory: true)
         drawTrajectory()
         flightState = .ready
     }
 
     // MARK: - 发射逻辑
 
-    private func updateSwingAim(at location: CGPoint) {
-        let origin = aimOrigin()
-        let backswingX = max(origin.x - location.x, 0)
-        let lift = max(origin.y - location.y, 0)
-        let distance = min(hypot(backswingX, lift), physics.maxPullDistance)
+    private func updateCannonAim(at location: CGPoint) {
+        let pivot = cannonPivotPosition()
+        let forwardX = max(location.x - pivot.x, 8)
+        let lift = max(location.y - pivot.y, 8)
+        let distance = min(hypot(forwardX, lift), physics.maxPullDistance)
         let normalizedDistance = max(0, distance - physics.minPullDistance)
         let powerDenominator = max(1, physics.maxPullDistance - physics.minPullDistance)
         aimPower = min(1, normalizedDistance / powerDenominator)
-        hasChargedSwing = aimPower >= physics.minimumSwingPowerToLaunch
+        hasChargedShot = aimPower >= physics.minimumLaunchPowerToFire
 
-        if backswingX > 6 || lift > 6 {
-            let dx = max(backswingX, 12)
-            let rawAngle = atan2(lift, dx)
-            aimAngle = min(max(rawAngle, physics.minimumSwingAngle), physics.maximumSwingAngle)
+        if forwardX > 6 || lift > 6 {
+            let rawAngle = atan2(lift, forwardX)
+            aimAngle = min(max(rawAngle, physics.minimumLaunchAngle), physics.maximumLaunchAngle)
         }
 
-        updateSwingAimingVisuals(showTrajectory: hasChargedSwing)
-        if hasChargedSwing {
+        updateCannonAimingVisuals(showTrajectory: hasChargedShot)
+        if hasChargedShot {
             drawTrajectory()
         } else {
             trajectoryLine.isHidden = true
@@ -1082,15 +1047,15 @@ class GameScene: SKScene {
     }
 
     private func drawTrajectory() {
-        guard let penguin = penguinNode else { return }
+        guard penguinNode != nil else { return }
 
         let launch = launchParameters()
-        let previewOffset: CGFloat = 18
         var vx = cos(launch.angle) * launch.speed
         var vy = sin(launch.angle) * launch.speed
 
-        var x = penguin.position.x + cos(launch.angle) * previewOffset
-        var y = penguin.position.y + sin(launch.angle) * previewOffset
+        let muzzle = cannonMuzzlePosition(for: launch.angle)
+        var x = muzzle.x
+        var y = muzzle.y
 
         let path = CGMutablePath()
         var firstPoint = true
@@ -1113,23 +1078,21 @@ class GameScene: SKScene {
         trajectoryLine.path = path
     }
 
-    private func startSwingLaunch() {
+    private func startCannonLaunch() {
         guard flightState == .aiming else { return }
 
         let committedAngle = aimAngle
-        let committedPower = aimPower
-        let impactPoint = CGPoint(
-            x: aimOrigin().x + cos(committedAngle) * 10,
-            y: aimOrigin().y + sin(committedAngle) * 10
-        )
-        flightState = .swinging
+        let committedPower = max(aimPower, physics.minimumLaunchPowerToFire)
+        let muzzlePoint = cannonMuzzlePosition(for: committedAngle)
+        flightState = .firing
         trajectoryLine.isHidden = true
         leftBandNode.removeAllActions()
         rightBandNode.removeAllActions()
+        cannonBlastNode.removeAllActions()
         leftBandNode.run(SKAction.fadeAlpha(to: 0.0, duration: 0.05))
         rightBandNode.run(SKAction.fadeAlpha(to: 0.0, duration: 0.05))
 
-        animateSwing(angle: committedAngle, power: committedPower, impactPoint: impactPoint) { [weak self] in
+        animateCannonFire(angle: committedAngle, power: committedPower, muzzlePoint: muzzlePoint) { [weak self] in
             self?.launchPenguin(angle: committedAngle, power: committedPower)
         }
     }
@@ -1140,11 +1103,8 @@ class GameScene: SKScene {
         let launch = launchParameters(angle: angle, power: power)
         let vx = cos(launch.angle) * launch.speed
         let vy = sin(launch.angle) * launch.speed
-        let launchOffset: CGFloat = 28
-        penguin.position = CGPoint(
-            x: penguin.position.x + cos(launch.angle) * launchOffset,
-            y: penguin.position.y + sin(launch.angle) * launchOffset
-        )
+        penguin.position = cannonMuzzlePosition(for: angle)
+        penguin.zRotation = angle + .pi / 2
 
         let hitPunch = SKAction.sequence([
             SKAction.scaleX(to: 1.18, y: 0.84, duration: 0.04),
@@ -1188,24 +1148,24 @@ class GameScene: SKScene {
         }
     }
 
-    private func animateSwing(angle: CGFloat, power: CGFloat, impactPoint: CGPoint, contact: @escaping () -> Void) {
-        let windUpAngle = angle - (0.92 + power * 0.42)
-        let contactAngle = angle + 0.12 + power * 0.12
-        let followThroughAngle = min(contactAngle + 0.34 + power * 0.08, physics.maximumSwingAngle + 0.44)
-        let restAngle = physics.minimumSwingAngle - 0.22
+    private func animateCannonFire(angle: CGFloat, power: CGFloat, muzzlePoint: CGPoint, contact: @escaping () -> Void) {
+        let recoilDistance = 8 + power * 12
+        let recoilPosition = CGPoint(
+            x: cannonBasePosition.x - cos(angle) * recoilDistance,
+            y: cannonBasePosition.y - sin(angle) * recoilDistance
+        )
 
-        swingPivotNode.removeAllActions()
-        swingPivotNode.zRotation = windUpAngle
-        swingPivotNode.run(
+        cannonPivotNode.removeAllActions()
+        cannonPivotNode.zRotation = angle
+        cannonPivotNode.run(
             SKAction.sequence([
-                SKAction.rotate(toAngle: windUpAngle - 0.08, duration: 0.05, shortestUnitArc: true),
-                SKAction.rotate(toAngle: contactAngle, duration: 0.09, shortestUnitArc: true),
+                SKAction.wait(forDuration: 0.03),
                 SKAction.run { [weak self] in
-                    self?.playSwingImpact(at: impactPoint)
+                    self?.playCannonBlast(at: muzzlePoint, angle: angle, power: power)
                     contact()
                 },
-                SKAction.rotate(toAngle: followThroughAngle, duration: 0.11, shortestUnitArc: true),
-                SKAction.rotate(toAngle: restAngle, duration: 0.16, shortestUnitArc: true)
+                SKAction.rotate(toAngle: angle - 0.1, duration: 0.08, shortestUnitArc: true),
+                SKAction.rotate(toAngle: angle, duration: 0.18, shortestUnitArc: true)
             ])
         )
 
@@ -1213,53 +1173,36 @@ class GameScene: SKScene {
         slingshotBase.run(
             SKAction.sequence([
                 SKAction.group([
-                    SKAction.move(to: CGPoint(x: batterBasePosition.x - 6, y: batterBasePosition.y - 4), duration: 0.05),
-                    SKAction.rotate(toAngle: -0.11, duration: 0.05)
+                    SKAction.move(to: recoilPosition, duration: 0.06),
+                    SKAction.rotate(toAngle: -0.05, duration: 0.06)
                 ]),
                 SKAction.group([
-                    SKAction.move(to: CGPoint(x: batterBasePosition.x + 10, y: batterBasePosition.y + 2), duration: 0.09),
-                    SKAction.rotate(toAngle: 0.12, duration: 0.09)
-                ]),
-                SKAction.group([
-                    SKAction.move(to: batterBasePosition, duration: 0.16),
-                    SKAction.rotate(toAngle: 0.0, duration: 0.16)
+                    SKAction.move(to: cannonBasePosition, duration: 0.18),
+                    SKAction.rotate(toAngle: 0.0, duration: 0.18)
                 ])
             ])
         )
 
-        frontArmNode.removeAllActions()
-        frontArmNode.run(
+        cannonBlastNode.removeAllActions()
+        cannonBlastNode.run(
             SKAction.sequence([
-                SKAction.rotate(toAngle: -0.22, duration: 0.05, shortestUnitArc: true),
-                SKAction.rotate(toAngle: 0.34, duration: 0.09, shortestUnitArc: true),
-                SKAction.rotate(toAngle: 0.16, duration: 0.11, shortestUnitArc: true),
-                SKAction.rotate(toAngle: 0.0, duration: 0.16, shortestUnitArc: true)
-            ])
-        )
-
-        backArmNode.removeAllActions()
-        backArmNode.run(
-            SKAction.sequence([
-                SKAction.rotate(toAngle: -0.16, duration: 0.05, shortestUnitArc: true),
-                SKAction.rotate(toAngle: 0.18, duration: 0.09, shortestUnitArc: true),
-                SKAction.rotate(toAngle: 0.08, duration: 0.11, shortestUnitArc: true),
-                SKAction.rotate(toAngle: 0.0, duration: 0.16, shortestUnitArc: true)
-            ])
-        )
-
-        swingTrailNode.removeAllActions()
-        swingTrailNode.path = swingArcPath(from: windUpAngle + 0.18, to: followThroughAngle + 0.1)
-        swingTrailNode.strokeColor = UIColor(red: 1.0, green: 0.9, blue: 0.58, alpha: 0.55)
-        swingTrailNode.alpha = 1.0
-        swingTrailNode.run(
-            SKAction.sequence([
-                SKAction.wait(forDuration: 0.05),
-                SKAction.fadeOut(withDuration: 0.24)
+                SKAction.fadeAlpha(to: 0.95, duration: 0.02),
+                SKAction.fadeOut(withDuration: 0.22)
             ])
         )
     }
 
-    private func playSwingImpact(at position: CGPoint) {
+    private func playCannonBlast(at position: CGPoint, angle: CGFloat, power: CGFloat) {
+        let blastPath = CGMutablePath()
+        blastPath.move(to: position)
+        blastPath.addLine(to: CGPoint(
+            x: position.x + cos(angle) * (44 + power * 26),
+            y: position.y + sin(angle) * (44 + power * 26)
+        ))
+        cannonBlastNode.path = blastPath
+        cannonBlastNode.strokeColor = UIColor(red: 1.0, green: 0.92, blue: 0.6, alpha: 0.85)
+        cannonBlastNode.alpha = 1.0
+
         let impactFlash = SKShapeNode(circleOfRadius: 15)
         impactFlash.fillColor = UIColor(white: 1.0, alpha: 0.82)
         impactFlash.strokeColor = UIColor(red: 1.0, green: 0.83, blue: 0.38, alpha: 1.0)
@@ -1275,6 +1218,27 @@ class GameScene: SKScene {
             ]),
             SKAction.removeFromParent()
         ]))
+
+        for index in 0..<3 {
+            let smoke = SKShapeNode(circleOfRadius: 12 + CGFloat(index) * 3)
+            smoke.fillColor = UIColor(white: 0.9, alpha: 0.38 - CGFloat(index) * 0.08)
+            smoke.strokeColor = .clear
+            smoke.position = CGPoint(
+                x: position.x - cos(angle) * CGFloat(index * 6),
+                y: position.y - sin(angle) * CGFloat(index * 6)
+            )
+            smoke.zPosition = 39
+            addChild(smoke)
+
+            smoke.run(SKAction.sequence([
+                SKAction.group([
+                    SKAction.moveBy(x: cos(angle) * 28, y: sin(angle) * 28 + 12, duration: 0.26),
+                    SKAction.scale(to: 1.8, duration: 0.26),
+                    SKAction.fadeOut(withDuration: 0.26)
+                ]),
+                SKAction.removeFromParent()
+            ]))
+        }
 
         if let gameCamera {
             gameCamera.removeAction(forKey: "impactShake")
@@ -1537,7 +1501,7 @@ class GameScene: SKScene {
         let activeBlocks = iceBlocks.filter { !$0.isBreaking && $0.parent != nil }
         if activeBlocks.isEmpty {
             showResult(success: true)
-        } else if activePenguin != nil || flightState == .flying || flightState == .swinging {
+        } else if activePenguin != nil || flightState == .flying || flightState == .firing {
             return
         } else if penguinsRemaining <= 0 {
             showResult(success: false)
