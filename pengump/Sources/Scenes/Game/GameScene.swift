@@ -3,12 +3,12 @@ import SpriteKit
 // MARK: - 物理常量
 
 struct GamePhysics {
-    static let maxPullDistance: CGFloat = 138.0
-    static let minPullDistance: CGFloat = 18.0
+    static let maxPullDistance: CGFloat = 120.0
+    static let minPullDistance: CGFloat = 12.0
     static let launchSpeedMultiplier: CGFloat = 0.72
-    static let minimumLaunchSpeed: CGFloat = 220.0
-    static let maxLaunchSpeed: CGFloat = 420.0
-    static let minimumLaunchAngle: CGFloat = .pi / 12
+    static let minimumLaunchSpeed: CGFloat = 300.0
+    static let maxLaunchSpeed: CGFloat = 560.0
+    static let minimumLaunchAngle: CGFloat = .pi / 4.5
     static let maximumLaunchAngle: CGFloat = .pi * 0.42
     static let minimumLaunchPowerToFire: CGFloat = 0.10
     static let gravity: CGFloat = 0.22
@@ -550,11 +550,11 @@ class GameScene: SKScene {
     }
 
     private func defaultAimAngle() -> CGFloat {
-        .pi / 4.8
+        .pi / 4
     }
 
     private func defaultAimPower() -> CGFloat {
-        0.58
+        0.5
     }
 
     private func cannonPivotPosition() -> CGPoint {
